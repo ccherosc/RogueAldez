@@ -1,0 +1,27 @@
+{
+  "name": "rogue-aldez",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "A roguelike Zelda. Browser, TypeScript, WebGL2, zero assets.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "lint:layers": "node scripts/lint-layers.ts",
+    "check": "npm run typecheck && npm run lint:layers && npm run gen:verify && npm run gen:check && npm run world:check",
+    "world:check": "node scripts/worldgen-check.ts",
+    "gen:art": "node scripts/gen-art.ts",
+    "gen:verify": "node scripts/verify-art.ts",
+    "gen:check": "node scripts/gen-check.ts",
+    "world:sample": "node scripts/world-sample.ts",
+    "bundle": "npm run build && node scripts/bundle-single.ts",
+    "capture": "node scripts/capture.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "playwright": "^1.62.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}

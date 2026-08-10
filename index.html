@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Rogue Aldez</title>
+    <style>
+      /* The canvas is upscaled from a 256x224 internal target by an integer
+         factor; the page just centres it on black and stays out of the way. */
+      html, body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+        font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+      }
+      body { display: grid; place-items: center; }
+      canvas {
+        display: block;
+        image-rendering: pixelated;
+        touch-action: none;
+      }
+      #hud {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        color: #8de08d;
+        font-size: 11px;
+        line-height: 1.45;
+        white-space: pre;
+        text-shadow: 0 1px 0 #000;
+        pointer-events: none;
+        opacity: 0.9;
+      }
+      #hud[hidden] { display: none; }
+      /* Touch overlay. Mounted only on touch devices; see player/touch.ts. */
+      #touch { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+      #touch button {
+        position: absolute;
+        pointer-events: auto;
+        width: 60px;
+        height: 60px;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 12px;
+        background: rgba(20, 24, 34, 0.42);
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 22px;
+        line-height: 1;
+        /* Stop the browser treating taps as scroll, zoom or text selection. */
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      #touch button:active { background: rgba(90, 110, 150, 0.6); }
+      #touch .pad button[data-dir="up"]    { left: 82px;  bottom: 156px; }
+      #touch .pad button[data-dir="left"]  { left: 16px;  bottom: 90px; }
+      #touch .pad button[data-dir="right"] { left: 148px; bottom: 90px; }
+      #touch .pad button[data-dir="down"]  { left: 82px;  bottom: 24px; }
+      #touch .acts button[data-key="KeyZ"] { right: 22px;  bottom: 96px; width: 74px; height: 74px; }
+      #touch .acts button[data-key="KeyX"] { right: 106px; bottom: 30px; }
+      #touch .fs { right: 16px; top: 16px; width: 44px; height: 44px; font-size: 18px; }
+
+      #fatal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        place-items: center;
+        padding: 24px;
+        color: #ff8080;
+        background: #140808;
+        font-size: 13px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <div id="hud" hidden></div>
+    <div id="fatal"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

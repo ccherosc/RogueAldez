@@ -1,0 +1,1084 @@
+ROGUE ALDEZ
+The Unwritten Kingdom
+High concept
+
+Aldez is an immortal warrior-wizard trapped inside a kingdom that rewrites itself every time he dies.
+
+He remembers every version of the world. Nobody else does.
+
+Villages move. Rivers change direction. Friends return as enemies. Kings become beggars. Dead civilizations rise beneath familiar roads. Yet certain powerful relics remain with Aldez from one reality to the next.
+
+The architect of this nightmare is Nagon, a fallen member of the Chroniclers: ancient demigods who do not merely record history, but write the laws, events and outcomes that reality is compelled to follow.
+
+Nagon has discovered how to introduce contradictions into the world’s underlying Chronicle. These contradictions form cracks in reality. Each crack forces the universe to rewrite itself in an attempt to remain coherent.
+
+Nagon cannot permanently kill Aldez because Aldez possesses no written ending. Instead, Nagon has turned him into the central contradiction of an endless experiment.
+
+Every time Aldez falls, the world begins another draft.
+
+To escape, Aldez must collect relics from realities that no longer exist, recover the truth of his own creation and decide whether the world should remain under the control of its divine authors.
+
+1. The identity of the game
+
+Rogue Aldez is a colorful, mysterious top-down action adventure with a melancholic roguelite structure.
+
+The game should feel inviting before it becomes unsettling.
+
+The player begins in green fields, lively villages and ancient forests. The world initially resembles a charming heroic fantasy. Gradually, the player notices things that should not be possible:
+
+A woman remembers a conversation that occurred in another reality.
+A ruined tower appears restored after Aldez dies.
+A friendly merchant becomes a royal executioner.
+A village cemetery contains Aldez’s grave.
+A child draws the same black symbol Nagon carved into reality.
+A dungeon entrance appears where a lake existed during the previous run.
+A boss begs Aldez not to defeat it because it remembers what happened last time.
+
+The central emotional experience is not merely repeated combat. It is the feeling of returning to a familiar place and discovering that it has become something different.
+
+The world is not randomly regenerated without meaning. It is rewritten.
+
+Every variation should feel like another version of the same history.
+
+2. The creation of reality
+
+Before there were kingdoms, stars or living creatures, there was the Silent Expanse.
+
+Within the Expanse appeared the First Mark: a single distinction between what existed and what did not.
+
+From that distinction arose the Chroniclers.
+
+The Chroniclers discovered that a sufficiently precise description could become reality. They created the Great Chronicle, an immeasurable living text in which every natural law, life and possible event is inscribed.
+
+They did not create every moment directly. Instead, they wrote the underlying rules:
+
+Fire rises.
+Water seeks the lowest path.
+The living forget.
+The dead do not return.
+Every cause must produce a consequence.
+Every life must eventually reach an ending.
+
+The world emerged inside those boundaries.
+
+Mortals eventually came to worship the Chroniclers as gods, though most people have forgotten their true nature. Temples describe them as divine storytellers who sing creation into existence.
+
+That is only partly true.
+
+The Chroniclers are not unlimited gods. They cannot simply demand any outcome they desire. Reality resists writing that contradicts what already exists.
+
+To change the world, a Chronicler must create a believable chain of causes.
+
+A king cannot simply disappear. There must be an assassin, an illness, an accident or a forgotten war.
+
+A mountain cannot simply move. There must be an earthquake, an ancient machine or a force capable of shifting it.
+
+Reality must be persuaded.
+
+3. The Chroniclers
+
+There are seven known seats within the Great Chronicle.
+
+Elowen, Chronicler of Beginnings
+
+Elowen writes births, discoveries, awakenings and the first steps of new civilizations.
+
+She believes every world must preserve the possibility of renewal.
+
+Ilyra, Chronicler of Names
+
+Ilyra binds identity to existence.
+
+To possess a true name is to remain yourself as the world changes around you. Names erased by Ilyra disappear not only from records, but eventually from memory.
+
+Torren, Chronicler of Measure
+
+Torren establishes time, distance, proportion and natural law.
+
+He is the least sympathetic toward mortals. To Torren, suffering is acceptable if reality remains mathematically stable.
+
+Velis, Chronicler of Memory
+
+Velis governs what the living remember, what civilizations preserve and what history forgets.
+
+Velis maintains that complete memory would destroy the mortal mind.
+
+Sereth, Chronicler of Mercy
+
+Sereth writes exceptions.
+
+She is responsible for unlikely survivals, forgiveness, recovery and second chances. She believes a perfectly consistent world would be unbearably cruel.
+
+Nagon, Chronicler of Endings and Revision
+
+Nagon once decided when stories, lives and civilizations had reached their conclusion.
+
+He also corrected contradictions within the Chronicle.
+
+Because of this responsibility, Nagon became more familiar with the weaknesses of reality than any other Chronicler.
+
+The Empty Seat
+
+The seventh seat has been vacant since before recorded history.
+
+No Chronicler will explain who occupied it.
+
+At the center of the game’s deepest mystery is the possibility that the Empty Seat once belonged to the Chronicler of Choice.
+
+4. Nagon’s fall
+
+Nagon spent ages writing endings.
+
+He ended wars that could not be allowed to continue. He ended royal bloodlines. He ended plagues, golden ages, rebellions and lives.
+
+Over time, he became convinced that the Great Chronicle was not preserving reality. It was imprisoning it.
+
+Every mortal believed they possessed free will, but all possibilities existed inside boundaries written by unseen beings.
+
+A farmer could choose which seed to plant, but not whether the seasons existed.
+
+A soldier could choose whether to fight, but not whether death was final.
+
+A queen could change the law, but she could not change the nature of cause and consequence.
+
+Nagon came to see the Chroniclers as benevolent tyrants.
+
+He proposed that mortals be allowed to write their own reality.
+
+The other Chroniclers refused.
+
+They argued that unrestricted possibility would destroy continuity. Contradictory histories would overlap. Identity would dissolve. Every desire would generate a separate world until existence became incoherent.
+
+Nagon secretly began experimenting.
+
+He discovered a forbidden form of writing called Crackscript.
+
+Normal Chronicle writing creates a cause that leads to an outcome. Crackscript writes two mutually exclusive truths into the same place.
+
+A door is open.
+
+The same door has never been built.
+
+A king is alive.
+
+The same king died as an infant.
+
+Aldez stands here.
+
+Aldez has never existed.
+
+Reality cannot accept both statements, but it cannot discard either one. A crack forms as the world struggles to reconcile the contradiction.
+
+Nagon believes these cracks are not destruction.
+
+He calls them freedom.
+
+5. Aldez, the man without an ending
+
+Aldez was born in the border settlement of Venn Tor, though no surviving map agrees on where Venn Tor stood.
+
+In some histories, it was a farming village.
+
+In others, it was a fortress.
+
+In one surviving account, Venn Tor was never settled at all.
+
+As a young man, Aldez served as a pathwarden, protecting travelers from beasts and raiders. He possessed a minor talent for Formcraft, the mortal practice of manipulating small portions of reality through symbols, gestures and disciplined intent.
+
+A Formcrafter cannot rewrite the Chronicle. They can only temporarily influence its existing rules.
+
+Aldez could:
+
+Redirect the force of a blow.
+Draw heat from flame.
+Bind wind into a cutting arc.
+Mark an enemy so its movement could be anticipated.
+Place temporary laws upon objects.
+Command a broken mechanism to remember how it once moved.
+
+Aldez’s immortality began during an event called the Burning of Venn Tor.
+
+The official history says raiders destroyed the settlement.
+
+The surviving evidence contradicts this.
+
+During the attack, Aldez discovered Sereth, Chronicler of Mercy, walking among the dying in mortal form. Nagon had arranged the massacre to test whether a Chronicler could be forced to violate the Chronicle.
+
+Aldez confronted Nagon and was mortally wounded.
+
+Sereth attempted to save him, but Nagon had already written Aldez’s death into the Chronicle.
+
+Unable to erase the ending without damaging reality, Sereth broke her own divine quill and struck Aldez’s final sentence from the Chronicle.
+
+She did not write that Aldez survived.
+
+She merely removed the statement that he died.
+
+Aldez became unfinished.
+
+His body can be wounded, broken and killed, but reality cannot permanently accept his death. Eventually, the world returns him to the last place where his existence was firmly established.
+
+Aldez feels every death.
+
+He remembers drowning, burning, bleeding and being crushed. Immortality has not made him fearless. It has taught him exactly how many ways a person can suffer.
+
+6. The kingdom of Ostreya
+
+The game takes place in the Kingdom of Ostreya, a compact but culturally rich realm surrounded by mountains, ancient woodland and a western sea.
+
+Ostreya was founded around the Bell of First Dawn, an enormous bell said to have rung when the first sunrise appeared over the mortal world.
+
+The kingdom is divided into five major regions connected by roads, rivers and hidden passages.
+
+At its center stands the capital, Veyrhold, built upon older cities that descend deep beneath the earth.
+
+Ostreya is a living country rather than an empty wilderness.
+
+Its people farm, trade, worship, argue, celebrate, steal and fall in love whether Aldez is present or not.
+
+Daily life
+
+The people of Ostreya measure the day by bells.
+
+The First Bell opens city gates.
+
+The Third Bell begins trade.
+
+The Sixth Bell marks the evening meal.
+
+The Ninth Bell is traditionally rung for the dead.
+
+Since the reality fractures began, some settlements have heard a Tenth Bell at midnight.
+
+No physical bell has ever been found.
+
+Magic
+
+Most Ostreyan magic is based on Formcraft.
+
+Magic is not a limitless energy. It is a temporary argument made against reality.
+
+A fire spell does not create fire from nothing. It convinces heat to gather in one place.
+
+A healing spell does not restore a body instantly. It reminds flesh of its undamaged form.
+
+A ward does not make someone invulnerable. It tells force to travel elsewhere.
+
+The stronger the contradiction, the harder the spell is to maintain.
+
+Religion
+
+Most citizens worship the Seven Hands, softened religious versions of the Chroniclers.
+
+Priests teach that each Hand guides a part of life.
+
+Farmers ask the First Hand for beginnings.
+
+Judges call upon the Measuring Hand.
+
+Mourners pray to the Final Hand.
+
+Knowledge that the Chroniclers physically exist would destabilize every religious and political institution in Ostreya.
+
+Economy
+
+Ostreya’s major resources include:
+
+Bell iron from the northern mountains
+Moonflax woven into magical cloth
+Ember salt used to preserve food and stabilize enchantments
+Glassfish harvested from Lake Orris
+Hollowroot resin used in medicine
+Star amber found around reality fractures
+
+Star amber becomes increasingly important during the game. It is crystallized possibility: matter that formed when two versions of reality collided.
+
+7. How the loop begins
+
+Years after Venn Tor, Aldez works as a wandering pathwarden and relic hunter.
+
+He receives a letter from Mara Venn, a royal archivist researching impossible changes in Ostreya’s historical records.
+
+Mara has discovered:
+
+Maps showing cities beneath existing villages
+Royal genealogies containing people who never lived
+Identical books with different endings
+Records of battles remembered by only one surviving soldier
+References to Aldez in documents centuries older than he is
+
+Mara asks Aldez to meet her beneath the Bell of First Dawn.
+
+There, they discover Nagon carving Crackscript into the foundation of reality.
+
+Nagon reveals that Ostreya has become his proving ground. He intends to fracture the kingdom repeatedly until reality learns to exist without a single authoritative history.
+
+Aldez attacks him.
+
+Nagon cannot write Aldez’s death because no such ending exists in the Chronicle.
+
+Instead, Nagon writes a new sentence:
+
+When Aldez falls, Ostreya will reconsider everything that led him here.
+
+Nagon drives a black quill through the shadow cast by Aldez’s body.
+
+The Bell of First Dawn rings backward.
+
+Reality breaks.
+
+Aldez awakens in a meadow outside a village he recognizes, but the road is wrong. The castle is missing from the horizon. Nobody knows his name.
+
+Mara Venn has never existed.
+
+At least, not in this version of the world.
+
+8. The rules of the reality loop
+
+The loop must have understandable rules so that the story feels mysterious rather than arbitrary.
+
+Rule One: Aldez is the constant
+
+Aldez returns after death because reality cannot finalize his absence.
+
+His body is reconstructed at the Last Certainty, usually a shrine, inn, camp or ancient marker where his presence became firmly established.
+
+Rule Two: The world does not reset
+
+Time does not simply rewind.
+
+Reality generates a new history that could plausibly have led to Aldez awakening at the Last Certainty.
+
+The new history may differ by decades, centuries or individual decisions.
+
+Rule Three: Major truths resist change
+
+Certain locations and people possess powerful historical weight.
+
+The Bell of First Dawn usually exists.
+
+Veyrhold usually becomes the capital.
+
+Mara is usually drawn toward hidden knowledge.
+
+A blacksmith named Orra almost always learns to work star amber.
+
+These are Anchors.
+
+Their circumstances change, but something essential persists.
+
+Rule Four: contradictions create monsters
+
+When incompatible histories overlap, they produce creatures called Errata.
+
+Errata are not ordinary animals.
+
+They are discarded possibilities trying to establish themselves as real.
+
+Some Errata resemble distorted people. Others are impossible combinations of buildings, creatures, machines and memories.
+
+Rule Five: relics can become Anchored
+
+Objects carried through powerful fractures may become bound to Aldez rather than to the world.
+
+These Continuance Relics survive his death.
+
+Each relic contains a memory of the reality in which it was found.
+
+Aldez cannot carry every relic simultaneously. Before beginning a new journey, he selects which relics to awaken from his Reliquary of Selves.
+
+This creates the game’s persistent equipment system.
+
+Rule Six: people can begin to remember
+
+Most people lose all knowledge of previous realities.
+
+Repeated exposure to Aldez, star amber or major fractures can cause Echo Memory.
+
+An NPC may experience:
+
+Dreams of conversations that never happened
+Grief for people they have never met
+Skills learned in another life
+Fear or affection toward Aldez without knowing why
+Memories of dying in a previous reality
+
+Echo Memory makes recurring characters emotionally important.
+
+Aldez is not merely rebuilding statistics. He is slowly rebuilding relationships.
+
+9. Major characters
+Aldez
+
+Aldez is capable, dryly humorous and deeply tired.
+
+He does not begin as a chosen hero. He initially wants to stop Nagon, restore Mara and escape the loop.
+
+Over time, his goal becomes more complicated.
+
+Every reality contains people worth saving. Resetting the world can erase entire lives, marriages and communities.
+
+Aldez must confront a terrible question:
+
+Is restoring the original reality truly different from destroying every alternate one?
+
+Aldez’s internal conflict
+
+Aldez remembers everything, but memory is not the same as identity.
+
+As hundreds of lives accumulate, he begins forgetting which experiences belonged to which reality.
+
+He remembers being married, though the woman never knew him in most worlds.
+
+He remembers raising a child who no longer exists.
+
+He remembers killing people who are now innocent.
+
+He remembers kingdoms where he was celebrated and others where his name was a curse.
+
+The player’s collection of relics becomes a physical representation of Aldez’s burden.
+
+Mara Venn
+
+Mara is the emotional center of the story.
+
+In the original reality, she is a royal archivist, historian and investigator. She is intelligent, skeptical and willing to challenge Aldez rather than simply admire him.
+
+Mara does not persist in one fixed role.
+
+Across different drafts she may appear as:
+
+The royal archivist
+A traveling thief
+The ruler of Ostreya
+A prisoner accused of forbidden magic
+A village healer
+The leader of a rebellion
+Nagon’s devoted student
+An elderly historian
+A child who dreams about Aldez
+A ghost inhabiting the royal library
+A woman who never learned to read
+
+Her essential Anchor is curiosity.
+
+Whatever life she is given, Mara eventually notices that the world does not make sense.
+
+As Echo Memory develops, Mara begins leaving messages for herself in locations likely to survive the next rewrite.
+
+Aldez will come. You will not remember him. Trust the sadness you feel when he says your name.
+
+Mara’s relationship with Aldez should not automatically be romantic. Player choices can shape it into friendship, love, rivalry or mistrust.
+
+Nagon
+
+Nagon is calm, articulate and almost never visibly angry.
+
+He does not regard himself as a destroyer.
+
+He sees himself as the first being willing to grant creation genuine freedom.
+
+Nagon frequently speaks to Aldez through:
+
+Mirrors
+Pools of still water
+Books with blank pages
+The mouths of defeated Errata
+Statues whose faces change when the player looks away
+
+He assists Aldez on several occasions because Aldez’s adaptation is part of the experiment.
+
+Nagon’s central argument is persuasive:
+
+You call this world broken because it changes without your permission. Before me, it remained unchanged without theirs.
+
+Nagon genuinely cares about mortal freedom, but he has gradually stopped caring about individual mortals.
+
+He values possibility more than people.
+
+Orra Flint
+
+Orra is a blacksmith who appears in nearly every reality.
+
+Her age, species, social position and personality can vary, but she always works with metal.
+
+Orra is one of the first people to develop Echo Memory.
+
+She cannot recall previous worlds clearly, but her hands remember weapons she forged for Aldez.
+
+She eventually creates the Continuance Forge, allowing Aldez to strengthen Anchored relics between runs.
+
+Orra provides warmth and humor while also expressing the human cost of the loop.
+
+In one reality she may have a spouse and three children.
+
+In the next, none of them ever existed.
+
+She cannot remember their names, but she still sets four extra places at dinner.
+
+Pell
+
+Pell is a small creature formed from a torn fragment of the Great Chronicle.
+
+He resembles a black paper moth with bright eyes and folding wings.
+
+Pell can flatten himself against walls, enter books and reveal hidden Crackscript.
+
+He speaks in incomplete sentences because portions of his text are missing.
+
+Pell provides humor, tutorials and observations, but he is more important than he initially appears.
+
+He is a surviving fragment of the missing Chronicler of Choice.
+
+Pell is not the lost god himself. He is the smallest surviving piece of the idea that mortals were once intended to possess genuine authorship over their lives.
+
+Queen Maeryn
+
+In the most stable reality, Maeryn rules Ostreya from Veyrhold.
+
+She is pragmatic, politically skilled and aware that her family’s claim to the throne is built upon carefully edited history.
+
+Maeryn initially considers Aldez a threat.
+
+Eventually, she reveals that Ostreya’s royal family has secretly served the Chroniclers for generations. The monarchy protects several sealed entrances into the Underchronicle beneath the capital.
+
+In alternate realities, Maeryn may be a general, exile, tyrant, rebel or forgotten corpse.
+
+Her Anchor is responsibility.
+
+Even when she is cruel, she believes she is preserving Ostreya.
+
+Sir Cael Ordan
+
+Cael is Ostreya’s greatest knight and Aldez’s recurring rival.
+
+In early drafts, Cael hunts Aldez because reality identifies Aldez as the source of instability.
+
+Cael believes continuity is more important than any one person.
+
+As he develops Echo Memory, he realizes that he has killed Aldez many times.
+
+In some realities, Cael becomes an ally. In others, knowledge of the loop drives him mad.
+
+Cael eventually gains a relic that allows him to remember between deaths, making him the only mortal who can fully understand Aldez’s burden.
+
+Unlike Aldez, Cael is still capable of dying permanently.
+
+10. Factions
+The Lantern Guild
+
+Cartographers, messengers and explorers who record roads and settlements.
+
+The Guild notices that its maps change overnight.
+
+Members begin hiding old maps behind walls and beneath floorboards.
+
+The Lantern Guild becomes Aldez’s primary source of world information.
+
+The Keepers of the Ninth Bell
+
+A monastic order responsible for funeral rites and historical records.
+
+They believe forgotten deaths damage the world.
+
+Some Keepers assist Aldez by preserving names from erased realities.
+
+Others consider his immortality an abomination.
+
+The Ash Choir
+
+Followers of Nagon who deliberately expose themselves to fractures.
+
+They believe stable identity is a prison.
+
+Members wear masks containing different faces and abandon their birth names.
+
+Some are villains. Others are desperate people seeking to escape poverty, illness or social roles assigned to them.
+
+The Crown
+
+Ostreya’s government attempts to suppress knowledge of the fractures to prevent panic.
+
+Depending on the reality, the Crown may protect Aldez, hunt him or attempt to use his immortality.
+
+The Unwritten
+
+People and creatures erased from the Chronicle but not completely destroyed.
+
+They survive between realities in a place called the Margin.
+
+The Unwritten appear monstrous because the world no longer agrees on their shape.
+
+They are not inherently evil.
+
+Many simply want to be remembered.
+
+11. The five regions
+Amberwake Vale
+
+The opening region is a warm agricultural valley filled with farms, windmills, streams and small villages.
+
+It teaches the player how reality changes.
+
+Possible versions include:
+
+A prosperous harvest festival
+A valley occupied by royal soldiers
+A flooded wetland
+An abandoned region overrun by Errata
+A version in which the villagers worship Aldez as an ancient hero
+A version where Aldez is remembered as the monster who destroyed Venn Tor
+Primary dungeon: The Mill Beneath the Hill
+
+An ancient machine under a village mill regulates the flow of local rivers.
+
+In different drafts it becomes a temple, prison, mine or buried war engine.
+
+Boss: The Harvest King
+
+A massive figure assembled from abandoned scarecrows, farm tools and the memories of villagers sacrificed in an erased famine.
+
+Hollowroot Wood
+
+An ancient forest whose trees share memory through their roots.
+
+The forest remembers previous realities better than humans do.
+
+Paths change, but carved wounds in the oldest trees persist.
+
+Primary dungeon: The Rootbound Court
+
+A palace grown inside a colossal tree.
+
+Its rooms rearrange depending on which version of the forest dominates the current draft.
+
+Boss: The Antlered Prior
+
+A former Keeper of the Ninth Bell absorbed into the forest after attempting to preserve too many contradictory memories.
+
+He remembers every version of his defeat and changes tactics accordingly.
+
+Glassmere
+
+A vast lake surrounded by fishing towns, old observatories and drowned ruins.
+
+Some realities contain a healthy lake.
+
+Others contain a dry crater or an inland sea.
+
+Buildings from erased versions remain visible beneath the water.
+
+Primary dungeon: The Drowned Scriptorium
+
+A submerged archive built to preserve books that the Chroniclers ordered destroyed.
+
+The player manipulates water levels and reflects light through glass corridors.
+
+Boss: The Glass Widow
+
+An Errata formed from several incompatible versions of Mara.
+
+She speaks using fragments of conversations Aldez had with Mara in earlier runs.
+
+The Belliron Peaks
+
+A northern mountain range containing mines, monasteries and enormous abandoned foundries.
+
+Bell iron stabilizes Formcraft, making the region strategically important.
+
+Primary dungeon: The Furnace of Ten Bells
+
+A foundry where the first royal bells were made.
+
+The impossible Tenth Bell is being constructed inside it by the Ash Choir.
+
+Boss: The Bell-Eater
+
+A crawling mass of molten metal, mouths and broken weapons.
+
+It consumes sound, temporarily removing music and effects from portions of the fight.
+
+Veyrhold and the Undercrown
+
+Veyrhold is the capital and the most variable location in the game.
+
+It may appear as:
+
+A thriving royal city
+A military dictatorship
+A republic
+A ruined battlefield
+A city controlled by the Ash Choir
+A city where humans vanished generations ago
+An enormous library governed by Mara
+A settlement built around the worship of Aldez
+
+Beneath Veyrhold lie the buried remains of every previous version of the capital.
+
+These layers form the Undercrown.
+
+Primary dungeon: The Palace of Many Crowns
+
+The palace shifts between multiple histories as the player moves through it.
+
+A throne room becomes a prison.
+
+A ballroom becomes a battlefield.
+
+A nursery becomes a crypt.
+
+Boss: The King Without a Face
+
+An amalgamation of every ruler erased to preserve Ostreya’s official history.
+
+He wears a rotating crown containing dozens of names.
+
+12. Story progression
+Prologue: The Backward Bell
+
+Aldez meets Mara beneath the Bell of First Dawn.
+
+Nagon creates the loop.
+
+Mara is erased.
+
+Aldez awakens in the first rewritten Ostreya.
+
+Act One: The World That Forgot
+
+Aldez travels through Amberwake Vale and Hollowroot Wood.
+
+He learns the basic rules of the loop and discovers that relics can survive death.
+
+He encounters alternate versions of Mara but cannot make any of them remember him.
+
+The act ends when Aldez deliberately allows himself to die to test whether a Continuance Relic will remain with him.
+
+It does.
+
+For the first time, death becomes a tool.
+
+Act Two: Echoes
+
+Aldez reaches Glassmere and the Belliron Peaks.
+
+Recurring characters begin developing Echo Memory.
+
+Mara starts leaving messages for future versions of herself.
+
+Cael obtains a relic that allows him to remember Aldez.
+
+The player discovers that Nagon is not generating worlds from nothing. He is pulling discarded possibilities from a hidden archive maintained by the Chroniclers.
+
+These alternate realities always existed as possibilities.
+
+The Chroniclers chose which one would become real.
+
+Act Three: The Buried Histories
+
+Aldez enters Veyrhold and descends into the Undercrown.
+
+He discovers entire civilizations that the Chroniclers removed from history because their existence threatened continuity.
+
+The Empty Seat belonged to Avara, Chronicler of Choice.
+
+Avara argued that mortals should participate in writing reality.
+
+The other Chroniclers removed Avara from the Chronicle.
+
+Nagon’s rebellion began partly as an attempt to uncover what happened to her.
+
+Pell is revealed as a fragment of Avara’s final surviving sentence.
+
+Act Four: The Man Who Cannot End
+
+Aldez learns the complete truth of his immortality.
+
+Sereth did not merely save him out of compassion.
+
+She believed an unfinished mortal might one day become capable of entering the Great Chronicle without being controlled by it.
+
+Aldez was intended as a safeguard against both Nagon and the other Chroniclers.
+
+Nagon trapped Aldez in the loop to force him to gather enough Anchored history to survive inside the Chronicle.
+
+In effect, Nagon has been creating the only being capable of reaching him.
+
+Final Act: The Margin
+
+Aldez assembles the Seven Contradictions, relics representing truths that should not be able to coexist.
+
+He enters the Margin, the space outside accepted reality.
+
+There he finds discarded people, extinct kingdoms and forgotten versions of himself.
+
+The final confrontation is not simply against Nagon.
+
+Aldez must fight through manifestations of his own abandoned identities:
+
+Aldez the king
+Aldez the murderer
+Aldez the husband
+Aldez the coward
+Aldez the conqueror
+Aldez the man who joined Nagon
+Aldez the version who finally wished to remain dead
+
+The final Nagon battle shifts through the visual styles and rules of previous realities.
+
+Weapons change properties.
+
+Rooms rewrite themselves.
+
+Old bosses return with altered histories.
+
+NPC allies appear based on the relationships the player preserved.
+
+13. Endings
+The Restored Chronicle
+
+Aldez defeats Nagon and repairs the original history.
+
+All alternate realities disappear.
+
+Aldez sacrifices his immortality and most of his memories.
+
+He awakens in the restored Ostreya as an ordinary mortal.
+
+Mara recognizes him, but neither can fully explain why.
+
+The final scene shows Aldez discovering one Continuance Relic hidden beneath his home.
+
+The restoration may not have been complete.
+
+The Open World
+
+Aldez destroys the authority of the Chroniclers.
+
+Reality stops following a single divine Chronicle.
+
+The world remains coherent, but history is now shaped collectively through mortal choices.
+
+Magic becomes more unpredictable.
+
+Aldez becomes mortal because death is no longer governed by the old rules.
+
+He accepts that his next death will be final.
+
+The game ends with him walking into an unknown land that no Chronicler has written.
+
+The Final Chronicler
+
+Aldez takes the Empty Seat.
+
+He does not restore one reality or unleash infinite contradiction.
+
+Instead, he creates a system in which multiple histories can exist without erasing one another.
+
+Aldez becomes the Chronicler of Continuance.
+
+He can no longer live within any single world, but he watches over all of them.
+
+Mara becomes the first mortal capable of communicating with him across realities.
+
+This ending unlocks the endless postgame mode, The Open Drafts.
+
+The Hidden Ending: A Story Without Authors
+
+By preserving certain NPC relationships, recovering every fragment of Pell and refusing several opportunities to exploit alternate realities, Aldez can restore Avara.
+
+Avara reveals that even the Chroniclers were written by something older.
+
+Aldez, Mara, Pell and Avara erase the distinction between author and character.
+
+The Great Chronicle becomes a blank book placed in the center of Veyrhold.
+
+The final image shows ordinary citizens beginning to write.
+
+14. How the story supports the game systems
+Procedural world generation
+
+Each generated world is called a Draft.
+
+A Draft is assembled from historical variables:
+
+Who rules Ostreya
+Which faction controls each region
+Which settlements survived
+Which roads exist
+Which characters are alive
+Which dungeon history dominates
+Which reality cracks are active
+Which version of Mara exists
+How the kingdom remembers Aldez
+
+This creates meaningful variation rather than arbitrary randomness.
+
+Persistent progression
+
+Permanent upgrades are Continuance Relics bound to Aldez.
+
+Each relic should contain:
+
+A gameplay effect
+A visual identity
+A short memory from the reality where it originated
+A connection to a recurring character or historical event
+
+The player is therefore collecting both power and story.
+
+Death
+
+Death should never display only “Game Over.”
+
+After dying, the player sees fragments of the current world being revised:
+
+Names crossed from books
+Roads redrawn
+Portraits changing
+Rivers moving across maps
+A living NPC becoming a gravestone
+A defeated enemy becoming a celebrated hero
+
+The player then awakens in the next Draft.
+
+Difficulty
+
+The world becomes more unstable as Aldez gathers relics.
+
+Powerful builds create stronger contradictions.
+
+This gives a narrative explanation for increasing enemy difficulty and stranger world generation.
+
+New Game Plus
+
+After completing the story, the player can enter the Open Drafts.
+
+These realities include more extreme combinations, alternate bosses, rare NPC histories and remnants of endings the player did not choose.
+
+15. Tone and presentation
+
+The story should not remain relentlessly grim.
+
+Ostreya needs warmth so the player cares when it changes.
+
+Recurring lighter elements can include:
+
+A chef who invents a different terrible stew in every reality
+A dog that always recognizes Aldez
+Two elderly rivals who become friends, enemies or spouses depending on the Draft
+A traveling musician who performs songs about events that never happened
+Children arguing over contradictory versions of the same folk hero
+Orra becoming increasingly annoyed that Aldez keeps bringing her impossible weapons
+Pell misunderstanding ordinary phrases because portions of his language are missing
+
+The world should alternate between:
+
+Adventure
+Wonder
+Humor
+Mystery
+Loss
+Cosmic unease
+
+The player should feel that every world is temporary, but not meaningless.
+
+That is the core statement of Rogue Aldez:
+
+A life does not become worthless because the world forgets it.
+
+Aldez’s real victory is not escaping death.
+
+It is learning to value lives, places and relationships even when he knows they may disappear in the next Draft.
+
+================================================================================
+CANON ADDENDUM I — THE SEARCH, THE EIGHT, AND THE LIBRARY
+Added to the bible as the spine of play. Everything above remains true; this
+says what Aldez is *doing* across Drafts, and why a player returns.
+================================================================================
+
+THE SHAPE OF A LIFE
+
+Ostreya is one world, not a stack of levels. Aldez wakes in it, crosses it, and
+dies in it. When he dies the Chronicle rewrites the world and he wakes again —
+in the same world, scrambled.
+
+Same world means: the same places, with the same names, holding the same
+histories. Veyrhold is always Veyrhold. The Ossuary is always the Ossuary.
+
+Scrambled means: where they sit, what condition they are in, which people are in
+which roles, and what the land between them looks like.
+
+So the loop is not "clear a floor". It is:
+
+    wake -> find the places you remember -> find them CHANGED ->
+    take what you came for -> die -> find them again, elsewhere, otherwise
+
+THE EIGHT
+
+There are eight Continuance Relics, and they are the object of every life. Each
+rests in a Sanctum — a place that exists in every Draft, is named the same in
+every Draft, and is never in the same place twice. Each Sanctum is held by
+something that will not move aside.
+
+The Eight are not power-ups that happen to be collectible. They are the eight
+things Aldez has refused to let the world forget. A relic carries a memory of
+the reality it was found in, and that memory is the only record of that reality
+that will ever exist.
+
+Relics persist across death. They are the only thing that does.
+
+THE LIBRARY
+
+When the eighth relic is taken, Aldez does not walk anywhere. The world lets go
+of him and he arrives at the Library — the place the Chroniclers keep, which is
+outside the rewriting because it is what does the rewriting.
+
+The Library is not on any map. It cannot be searched for. It is only ever
+arrived at, and only ever once per completed set.
+
+There he must find the Chronicler of Endings. The other Chroniclers will speak
+with him, deflect him, and in some Drafts lie to him. The Chronicler of Endings
+is the only one who can stop the rewriting, and the only one who does not want
+to be found.
+
+DISTANCE IS DIFFICULTY
+
+There are no locked gates in the overworld. The world is open from the first
+step. What stops Aldez is distance: the further from the place he woke, the
+older and less coherent the Errata, until the far edges of Ostreya hold things
+that were never people at all.
+
+This means a player is never told where they may go. They are only ever shown
+what it costs.
+
+WHAT PERSISTS, AND WHAT DOES NOT
+
+  Persists:      the Eight, the names of places, what Aldez has learned,
+                 Echo Memory in the people he has met often enough
+  Does not:      the map, the roads, who rules, who is alive, where anything is,
+                 and every scrap of goodwill he has earned from strangers
+
+The map resetting is not a punishment. It is the whole feeling. Aldez is the
+only thing in Ostreya that remembers the way.
+
+ANCHORS IN THEIR ROLES
+
+An Anchor appears in every Draft, in a role the Draft assigns: Mara may be a
+queen, a smith's daughter, a hermit on a scree slope, or a name cut into a stone
+with the year wrong. Her essence holds; her circumstances do not.
+
+A dead Anchor is not a failed Draft. A grave is content: it is the one form in
+which she can tell Aldez something she could not say alive.
+
+ECHO MEMORY IS THE REASON TO RETURN
+
+Meeting an Anchor once gets Aldez a direction. Meeting the same Anchor across
+many Drafts gets him something no map can hold: she begins to remember. First a
+hesitation. Then a question she should not be able to ask. Then, eventually, a
+person who knows him before he speaks and can tell him what she saw the last
+time the world ended.
+
+Aldez is not rebuilding a character sheet across lives.
+
+He is rebuilding a relationship, one death at a time.

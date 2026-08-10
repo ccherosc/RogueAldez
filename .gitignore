@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.captures/
+
+# Scratch scripts from debugging sessions are named with a leading underscore
+# and are never meant to survive the session that made them.
+scripts/_*
+
+# public/atlas/ is deliberately committed - generated art is reviewable,
+# diffable, and hand-editable via src/art/overrides/. The atlas is produced
+# deterministically from ART_SEED, so a diff there means the art actually
+# changed, which is exactly what you want to see in review.
+# See the art-synthesis skill.
