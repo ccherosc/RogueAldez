@@ -162,6 +162,7 @@ export class Scene {
   /** contextual teaching; learned flags persist so a veteran is never re-taught */
   readonly tutor: Tutor;
   private movedOnce = false;
+  private musicLevel = 0;
   private stepPhase = 0;
   private stepFoot = 0;
   private swungOnce = false;
@@ -1009,6 +1010,46 @@ export class Scene {
     });
   }
 
+  /**
+   * How hard the score is working, 0..1.
+   *
+   * This was `barredRoom ? 1 : 0`, which meant the music only ever reacted
+   * inside dungeons — the entire overworld could be swarming and the bed would
+   * stay becalmed. Danger is danger wherever it happens.
+   *
+   * Three inputs, in rising order of how alarming they are: something is near,
+   * several things are near, and you are nearly dead. The last is deliberately
+   * the strongest term — a low-health cue is the oldest trick in the genre
+   * because it works, and it tells the player something the HUD is too small to
+   * shout.
+   *
+   * Eased rather than set, so a single Keese drifting past does not swell the
+   * whole score for four frames.
+   */
+  private musicIntensity(): number {
+    if (this.barredRoom) {
+      this.musicLevel = 1;
+      return 1;
+    }
+    let near = 0;
+    for (const e of this.entities.all) {
+      if (!e.alive || e.kind !== 'enemy') continue;
+      const d = Math.hypot(e.x - this.player.x, e.y - this.player.y);
+      if (d < 140) near++;
+    }
+    const health = this.player.health / Math.max(1, this.player.maxHealth);
+    let target = 0;
+    if (near > 0) target = 0.45;
+    if (near >= 3) target = 0.75;
+    if (health <= 0.3) target = Math.max(target, 0.9);
+
+    // Rises quickly, falls slowly: a fight should announce itself and then let
+    // go, not flicker with every enemy that wanders in and out of range.
+    const rate = target > this.musicLevel ? 0.08 : 0.012;
+    this.musicLevel += (target - this.musicLevel) * rate;
+    return this.musicLevel;
+  }
+
   private beginRevision(): void {
     // Instability rises with each Draft: powerful runs create stronger
     // contradictions, which is the in-fiction reason the world gets harder.
@@ -1152,8 +1193,7 @@ export class Scene {
       if (this.clearPulse > 0) this.clearPulse--;
       if (this.actBanner > 0) this.actBanner--;
       if (this.hintFrames > 0) this.hintFrames--;
-      // Music follows the fight: a barred room opens the drone up.
-      music.setIntensity(this.barredRoom ? 1 : 0);
+      music.setIntensity(this.musicIntensity());
 
       if (this.player.dead) {
         this.beginRevision();

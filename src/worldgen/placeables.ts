@@ -30,7 +30,22 @@ export interface Placeable {
   breakable?: boolean;
   /** props only: blocks movement. Defaults true; a bush you wade through is false */
   solid?: boolean;
+  /**
+   * What this enemy *does to the player's position*, which is the only thing
+   * that matters when composing a fight.
+   *
+   *   ranged  punishes standing still, and is only interesting with distance
+   *   rusher  punishes committing to a swing, and must be able to reach you
+   *   swarm   punishes tunnel vision; individually trivial
+   *
+   * Three of one role is one fight repeated three times. Roles mixed *and placed
+   * with intent* is a problem: a ranged unit behind two rushers means closing
+   * through them or going around, and that decision is the encounter.
+   */
+  role?: EnemyRole;
 }
+
+export type EnemyRole = 'ranged' | 'rusher' | 'swarm';
 
 export const PLACEABLES: readonly Placeable[] = [
   // --- vegetation -----------------------------------------------------------
@@ -139,18 +154,43 @@ export const PLACEABLES: readonly Placeable[] = [
 
   // --- Errata ---------------------------------------------------------------
   {
-    id: 'octorok', kind: 'enemy', key: 'octorok', weight: 10,
+    id: 'octorok', kind: 'enemy', key: 'octorok', role: 'ranged', weight: 10,
     requires: [], forbids: ['frozen'],
   },
   {
-    id: 'moblin', kind: 'enemy', key: 'moblin', weight: 9,
+    id: 'moblin', kind: 'enemy', key: 'moblin', role: 'rusher', weight: 9,
     requires: [], forbids: [],
   },
   {
-    id: 'keese', kind: 'enemy', key: 'keese', weight: 10,
+    id: 'keese', kind: 'enemy', key: 'keese', role: 'swarm', weight: 10,
     requires: [], forbids: ['luminous'],
   },
 ];
+
+/**
+ * Weighted pick restricted to a role, falling back to any legal enemy.
+ *
+ * The fallback matters: a biome that forbids Keese must still be able to build a
+ * fight. An encounter that asked for a swarm and got a rusher is a worse
+ * encounter than intended but still a legal one — whereas returning null would
+ * silently produce an empty room, which is the failure nobody notices.
+ */
+export function pickByRole(
+  role: EnemyRole,
+  tags: ReadonlySet<Tag>,
+  rng: Rng,
+): Placeable | null {
+  const pool = eligible('enemy', tags).filter((p) => p.role === role);
+  if (pool.length === 0) return pickPlaceable('enemy', tags, rng);
+
+  const total = pool.reduce((sum, p) => sum + p.weight, 0);
+  let roll = rng.next() * total;
+  for (const p of pool) {
+    roll -= p.weight;
+    if (roll <= 0) return p;
+  }
+  return pool[pool.length - 1]!;
+}
 
 export function placeableById(id: string): Placeable {
   const found = PLACEABLES.find((p) => p.id === id);

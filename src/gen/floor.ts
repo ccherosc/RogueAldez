@@ -20,7 +20,7 @@ import type { Act } from '../chronicle/acts.ts';
 import type { Biome } from '../worldgen/biomes.ts';
 import { unionTags } from '../worldgen/tags.ts';
 import type { Tag } from '../worldgen/tags.ts';
-import { pickPlaceable } from '../worldgen/placeables.ts';
+import { pickPlaceable, pickByRole } from '../worldgen/placeables.ts';
 import { BIOMES, classify } from '../worldgen/biomes.ts';
 import { ClimateMap } from '../worldgen/fields.ts';
 import type { WorldPlacement, PlacedSite } from '../worldgen/placement.ts';
@@ -272,6 +272,77 @@ export function generateRegion(req: RegionRequest, rng: Rng): GeneratedRegion {
     sites,
     threat: centreThreat,
   };
+}
+
+/**
+ * Build a fight rather than scatter a bag of enemies.
+ *
+ * The old version shuffled the walkable tiles and dropped random legal enemies
+ * on the first N of them. Every room was therefore the same room: a handful of
+ * things that individually wanted to touch you, in no arrangement.
+ *
+ * An encounter is a *shape*. Two rules produce nearly all of it:
+ *
+ *   - **Ranged units need distance to be interesting.** Standing next to an
+ *     Octorok, its spit is a worse melee attack. Twelve tiles away, it is a
+ *     reason to keep moving. So they take the outermost spots and are spread
+ *     apart from each other, which turns two of them into a crossfire.
+ *   - **Rushers need to be between you and the thing shooting at you.** Placing
+ *     them inward of the ranged units makes the classic screen: close through
+ *     the rushers, go around, or answer the shooter with a boomerang. That
+ *     decision *is* the encounter, and it is what makes the items matter.
+ *
+ * Swarm sits in the middle band, where it interrupts whichever answer is chosen.
+ */
+function composeEncounter(
+  spots: Array<[number, number]>,
+  room: RoomNode,
+  count: number,
+  tags: ReadonlySet<Tag>,
+  rng: Rng,
+  out: EnemySpawn[],
+): void {
+  // Composition by size. Below three there is no shape to make, so a small room
+  // stays a skirmish rather than pretending to be a set piece.
+  const ranged = count >= 5 ? 2 : count >= 3 ? 1 : 0;
+  const swarm = count >= 4 ? 1 : 0;
+  const rushers = Math.max(0, count - ranged - swarm);
+
+  const cx = (room.rx + 0.5) * ROOM_TILES_W;
+  const cy = (room.ry + 0.5) * ROOM_TILES_H;
+  const byDistance = [...spots].sort(
+    (a, b) => Math.hypot(b[0] - cx, b[1] - cy) - Math.hypot(a[0] - cx, a[1] - cy),
+  );
+
+  const used: Array<[number, number]> = [];
+  /** Take a spot from a band of the distance-sorted list, spaced from the rest. */
+  const take = (from: number, to: number, minGap: number): [number, number] | null => {
+    const lo = Math.floor(byDistance.length * from);
+    const hi = Math.max(lo + 1, Math.floor(byDistance.length * to));
+    const band = byDistance.slice(lo, hi);
+    rng.shuffle(band);
+    for (const s of band) {
+      if (used.every((u) => Math.hypot(u[0] - s[0], u[1] - s[1]) >= minGap)) {
+        used.push(s);
+        return s;
+      }
+    }
+    return band[0] ?? null;
+  };
+
+  const emit = (role: 'ranged' | 'rusher' | 'swarm', spot: [number, number] | null): void => {
+    if (!spot) return;
+    const pick = pickByRole(role, tags, rng);
+    if (!pick) return;
+    out.push({ variant: pick.key, x: spot[0] * TILE + TILE / 2, y: spot[1] * TILE + TILE - 1 });
+  };
+
+  // Outermost third, well separated: two shooters covering different angles.
+  for (let i = 0; i < ranged; i++) emit('ranged', take(0, 0.34, 7));
+  // Inner half, loosely packed: the screen you have to get through.
+  for (let i = 0; i < rushers; i++) emit('rusher', take(0.45, 1, 3));
+  // Middle band: arrives while you are dealing with one of the other two.
+  for (let i = 0; i < swarm; i++) emit('swarm', take(0.3, 0.7, 4));
 }
 
 /** Ring distance from the waking place, 0..1 — the difficulty dial. */
@@ -1235,26 +1306,7 @@ function populate(
     }
   }
   if (spots.length === 0) return;
-  rng.shuffle(spots);
-
-  let previous = '';
-  for (let i = 0; i < count && i < spots.length; i++) {
-    let pick = pickPlaceable('enemy', tags, rng);
-    if (!pick) break;
-    // Avoid repeating the previous pick so rooms stay mixed — three of the same
-    // type is one fight repeated three times.
-    if (pick.key === previous && rng.chance(0.7)) {
-      const alt = pickPlaceable('enemy', tags, rng);
-      if (alt && alt.key !== previous) pick = alt;
-    }
-    previous = pick.key;
-    const [tx, ty] = spots[i]!;
-    out.push({
-      variant: pick.key,
-      x: tx * TILE + TILE / 2,
-      y: ty * TILE + TILE - 1,
-    });
-  }
+  composeEncounter(spots, room, count, tags, rng, out);
 
   // The big ones are scarce on purpose. One Hulk per unlucky room, never before
   // floor three, never in the room before the boss door — rarity is what makes

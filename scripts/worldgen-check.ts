@@ -317,6 +317,58 @@ check('same world seed yields an identical climate map', sameClimate);
 }
 
 // ---------------------------------------------------------------------------
+// Encounter composition
+// ---------------------------------------------------------------------------
+// A fight is a shape, not a bag. These prove the shape survives generation
+// rather than trusting that it does — the previous placement shuffled tiles and
+// dropped random legal enemies, and nothing would have caught a regression to it.
+{
+  const roleOf = new Map(PLACEABLES.filter((p) => p.role).map((p) => [p.key, p.role!]));
+  let mixedRooms = 0;
+  let bigRooms = 0;
+  let rangedDist = 0;
+  let rangedN = 0;
+  let rusherDist = 0;
+  let rusherN = 0;
+
+  for (let i = 0; i < 200; i++) {
+    const act = actAt(i % ACTS.length);
+    const biome = BIOMES[i % BIOMES.length]!;
+    const draft = rollDraft(1 + (i % 7), makeRng(0x7000 + i), i % 5);
+    const floor = generateFloor(draft, act, biome, makeRng(draft.seed), 2 + (i % 3));
+
+    for (const room of floor.rooms.values()) {
+      const cx = (room.rx + 0.5) * 16 * 16;
+      const cy = (room.ry + 0.5) * 14 * 16;
+      const here = floor.enemies.filter((e) =>
+        Math.floor(e.x / (16 * 16)) === room.rx && Math.floor(e.y / (14 * 16)) === room.ry);
+      if (here.length < 3) continue;
+      bigRooms++;
+      const roles = new Set(here.map((e) => roleOf.get(e.variant)).filter(Boolean));
+      if (roles.size > 1) mixedRooms++;
+
+      for (const e of here) {
+        const d = Math.hypot(e.x - cx, e.y - cy);
+        if (roleOf.get(e.variant) === 'ranged') { rangedDist += d; rangedN++; }
+        if (roleOf.get(e.variant) === 'rusher') { rusherDist += d; rusherN++; }
+      }
+    }
+  }
+
+  // Three of one role is one fight repeated three times.
+  const mixRate = mixedRooms / Math.max(1, bigRooms);
+  check('rooms of three or more mix enemy roles', mixRate > 0.75,
+    `${Math.round(mixRate * 100)}% of ${bigRooms} rooms`);
+
+  // Ranged units are only interesting with distance; rushers only if they can
+  // reach you. If these ever invert, the screen shape has been lost.
+  const rAvg = rangedDist / Math.max(1, rangedN);
+  const mAvg = rusherDist / Math.max(1, rusherN);
+  check('ranged units hold the outside, rushers the inside', rAvg > mAvg,
+    `ranged ${rAvg.toFixed(0)}px vs rusher ${mAvg.toFixed(0)}px from centre`);
+}
+
+// ---------------------------------------------------------------------------
 // The streamed overworld
 // ---------------------------------------------------------------------------
 
