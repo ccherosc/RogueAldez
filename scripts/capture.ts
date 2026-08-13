@@ -533,7 +533,80 @@ async function testItems(browser: Browser): Promise<void> {
   check('items: bombs start stocked', start.bombs > 0, `${start.bombs}`);
   check('items: bomb is selected first', start.item === 'bomb', start.item);
 
-  // Drop a bomb, walk clear, and let the fuse run.
+  // --- boomerang first, from the fixture's exact starting position -----------
+  //
+  // Order matters here, and getting it wrong cost two sessions. The bomb
+  // sequence walks the player 700ms to the left and waits out a fuse; throwing
+  // afterwards meant aiming from wherever that left them, which the check then
+  // papered over with retries and still failed on a game that was working
+  // perfectly. Instrumenting one throw showed a clean 60-frame stun on frame 3.
+  //
+  // The fixture already places the foe 56px dead ahead with its AI frozen. Throw
+  // from the spawn tile, along the axis, at a target that cannot move: nothing
+  // is left to be flaky about, and the check now measures the mechanic rather
+  // than the bot's aim.
+  await page.keyboard.press('KeyQ');
+  await page.waitForTimeout(120);
+  const cycled = await snap(page);
+  check('the item slot cycles', cycled.item === 'boomerang', cycled.item);
+
+  // hold(), not press(). Movement is sampled per simulation step via isHeld(),
+  // so a sub-frame press can land entirely between two 60Hz steps and never be
+  // seen — the player keeps facing 'down' and the throw goes the wrong way. That
+  // silent coin-flip is what made this check look like a game bug for two
+  // sessions; the mechanic was correct the whole time. Edge-latched inputs
+  // (menu navigation, attack) are safe with press(); directions are not.
+  await hold(page, 'ArrowRight', 140);
+
+  // Sample the stun *inside the page*, at display rate.
+  //
+  // Polling from the harness costs a round trip per sample, which is longer than
+  // the thing being measured decays in — the first observation after the hit
+  // read 31 of a 60-frame stun and the check failed on a correct game. A peak
+  // recorded in-page cannot miss it. This is the general lesson for any check
+  // measuring a short-lived value: watch from inside, report the extreme.
+  await page.evaluate(() => {
+    const w = window as unknown as { __peakStun?: number };
+    w.__peakStun = 0;
+    const tick = (): void => {
+      const s = (Reflect.get(window, '__aldez') as {
+        scene: { entities: { all: ReadonlyArray<{ alive: boolean; kind: string; hitstunFrames: number }> } };
+      }).scene;
+      for (const e of s.entities.all) {
+        if (e.alive && e.kind === 'enemy') w.__peakStun = Math.max(w.__peakStun ?? 0, e.hitstunFrames);
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
+  await page.keyboard.press('KeyC');
+  await page.waitForTimeout(100);
+  const thrown = await snap(page);
+  check('a boomerang can be thrown', thrown.boomerangs > 0, `${thrown.boomerangs}`);
+  await shot(page, 'items-boomerang');
+
+  // Sample fast: a 60-frame stun is one second, and coarse sampling was part of
+  // why this looked unreliable.
+  let returned = false;
+  for (let i = 0; i < 90; i++) {
+    await page.waitForTimeout(30);
+    const flight = await snap(page);
+    if (flight.boomerangs === 0) { returned = true; break; }
+  }
+  const stunSeen = await page.evaluate(
+    () => (window as unknown as { __peakStun?: number }).__peakStun ?? 0,
+  );
+  check('the boomerang stuns its target', stunSeen >= 45, `${stunSeen} frames`);
+  check('the boomerang returns and clears', returned);
+
+  const afterThrow = await snap(page);
+  check('the boomerang consumes no ammo', afterThrow.bombs === start.bombs,
+    `${start.bombs} -> ${afterThrow.bombs}`);
+
+  // --- then bombs ------------------------------------------------------------
+  await page.keyboard.press('KeyQ');
+  await page.waitForTimeout(120);
   await page.keyboard.press('KeyC');
   await page.waitForTimeout(120);
   const placed = await snap(page);
@@ -550,56 +623,9 @@ async function testItems(browser: Browser): Promise<void> {
   check('the blast destroys nearby props', blasted.props < start.props,
     `${start.props} -> ${blasted.props}`);
   await shot(page, 'items-blast');
-
-  // Cycle to the boomerang and throw it.
-  await page.keyboard.press('KeyQ');
-  await page.waitForTimeout(120);
-  const cycled = await snap(page);
-  check('the item slot cycles', cycled.item === 'boomerang', cycled.item);
-
-  // Throw *at the Octorok* and prove the stun, not just the flight. It wanders,
-  // so aim per attempt and allow retries — the claim under test is "a hit stuns
-  // for ~60 frames", not "the bot can snipe a moving target first try".
-  let sawThrow = false;
-  let returned = false;
-  let stunSeen = 0;
-  // The Octorok wanders, so a throw can legitimately miss. Ten attempts with a
-  // fresh approach each time makes a miss cost a retry rather than a red build —
-  // the claim under test is "a hit stuns for ~60 frames", and one miss says
-  // nothing about it. Four attempts was not enough and the check failed twice on
-  // a working game, which is worse than no check at all.
-  for (let attempt = 0; attempt < 10 && stunSeen < 45; attempt++) {
-    let s = await snap(page);
-    if (!s.nearestFoe) break;
-    // Line up on the foe's row first, then close the gap along x: a boomerang
-    // thrown along an axis sweeps through the target instead of past it.
-    const foe = s.nearestFoe;
-    s = await walkTo(page, s.px, foe.y, 6, 6);
-    s = await walkTo(page, foe.x, foe.y, 48, 14);
-    await faceToward(page, s, foe.x, foe.y);
-    await page.keyboard.press('KeyC');
-    await page.waitForTimeout(120);
-    const thrown = await snap(page);
-    sawThrow = sawThrow || thrown.boomerangs > 0;
-    if (attempt === 0) await shot(page, 'items-boomerang');
-
-    // Watch the flight: record the deepest stun, and whether it cleared.
-    for (let i = 0; i < 40; i++) {
-      await page.waitForTimeout(70);
-      const flight = await snap(page);
-      stunSeen = Math.max(stunSeen, flight.stunMax);
-      if (flight.boomerangs === 0) { returned = true; break; }
-    }
-  }
-  check('a boomerang can be thrown', sawThrow);
-  check('the boomerang returns and clears', returned);
-  check('the boomerang stuns its target', stunSeen >= 45, `${stunSeen} frames`);
-
-  const finalState = await snap(page);
-  check('the boomerang consumes no ammo', finalState.bombs === blasted.bombs,
-    `${blasted.bombs} -> ${finalState.bombs}`);
   await page.close();
 }
+
 
 /** Movement and camera invariants, measured on a calm fixture. */
 async function testMovement(browser: Browser): Promise<void> {
