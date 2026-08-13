@@ -98,6 +98,40 @@ export const sfx = {
     setTimeout(() => tone(1174.66, 0.5, 0.16, 'sine'), 230);
   },
   menuMove: (): void => tone(660, 0.05, 0.10, 'square'),
+
+  /**
+   * A blast. Bombs were borrowing the enemy-death sound, which is thin and
+   * pitched and reads as "something small popped" — the one moment in the game
+   * with real physical force had the least of it.
+   *
+   * Three layers, because an explosion is three events: a crack at the front, a
+   * body of noise, and a low drop that arrives fractionally late the way real
+   * pressure does.
+   */
+  blast: (): void => {
+    hit(2600, 0.06, 0.30, 0.7);
+    hit(320, 0.55, 0.42, 0.5);
+    tone(120, 0.7, 0.34, 'sine', 0.28);
+    setTimeout(() => hit(180, 0.5, 0.20, 0.6), 40);
+  },
+
+  /**
+   * A footstep. Barely audible on its own and enormous in aggregate — nothing
+   * else makes a world feel like ground rather than a floor texture. Kept low
+   * and short so forty a minute never becomes noticeable.
+   */
+  step: (variant: number): void => hit(variant === 0 ? 900 : 1150, 0.045, 0.045, 2.2),
+
+  /**
+   * Waking. The Bell of First Dawn, forward — the exact inverse of `death`,
+   * which rings it backward. Canon says the bell runs backward when reality
+   * breaks; this is what it sounds like when reality has just been rewritten and
+   * is, for the moment, holding.
+   */
+  wake: (): void => {
+    tone(146.83, 1.1, 0.22, 'sine', 1.35);
+    setTimeout(() => tone(196, 0.9, 0.20, 'sine', 1.5), 200);
+  },
 };
 
 let wired = false;

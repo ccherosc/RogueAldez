@@ -34,6 +34,8 @@ export interface SaveData {
   actIndex: number;
   /** relic ids awakened in the Reliquary; these outlive every rewrite */
   relics: string[];
+  /** tutor lessons the player has demonstrated; never taught twice */
+  taught?: string[];
 }
 
 export function emptySave(worldSeed: number): SaveData {
@@ -47,6 +49,7 @@ export function emptySave(worldSeed: number): SaveData {
     worldSeed,
     actIndex: 0,
     relics: [],
+  taught: [],
   };
 }
 
@@ -82,6 +85,7 @@ export function loadSave(worldSeed: number): SaveData {
       worldSeed: num(parsed.worldSeed, worldSeed),
       actIndex: num(parsed.actIndex, base.actIndex),
       relics: Array.isArray(parsed.relics) ? parsed.relics.filter((r) => typeof r === 'string') : [],
+    taught: Array.isArray(parsed.taught) ? parsed.taught.filter((r) => typeof r === 'string') : [],
     };
   } catch {
     return emptySave(worldSeed);

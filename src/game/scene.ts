@@ -54,6 +54,7 @@ import { drawHud } from '../ui/hud.ts';
 import { drawTextCentred } from '../ui/text.ts';
 import type { LightBuffer } from '../render/lights.ts';
 import { drawMenu, menuLength, BOSS_ITEMS } from '../ui/menu.ts';
+import { Tutor, LESSON_IDS } from '../ui/tutor.ts';
 import type { MenuState } from '../ui/menu.ts';
 import { drawRevision, revisionReadyAt } from '../ui/revision.ts';
 import type { SolidQuery } from '../physics/collide.ts';
@@ -158,6 +159,14 @@ export class Scene {
   private nudgeY = 0;
   private nudgeFrames = 0;
   readonly loadout = new Loadout();
+  /** contextual teaching; learned flags persist so a veteran is never re-taught */
+  readonly tutor: Tutor;
+  private movedOnce = false;
+  private stepPhase = 0;
+  private stepFoot = 0;
+  private swungOnce = false;
+  private liftedOnce = false;
+  private usedItemOnce = false;
   private carriedId: number | null = null;
   private boomerang: {
     id: number;
@@ -219,6 +228,9 @@ export class Scene {
     // The climate map is the world's geography and derives from the world seed
     // alone — the same seed always grows the same Ostreya.
     this.climate = new ClimateMap(this.save.worldSeed);
+    // Fixtures skip teaching entirely: a sealed scenario must not have prompts
+    // appearing over the thing a capture check is measuring.
+    this.tutor = new Tutor(this.fixture ? LESSON_IDS : (this.save.taught ?? []));
     this.ambientRng = this.rng.stream('ambient-weather');
     this.amber = this.save.amber;
     this.metaKills = this.save.totalKills;
@@ -263,6 +275,9 @@ export class Scene {
     // player's real save.
     if (this.fixture) return;
     this.save.amber = this.amber;
+    // What the player has proved they know. Carrying this across Drafts is the
+    // difference between teaching and nagging.
+    this.save.taught = this.tutor.known;
     this.save.draftsLived = this.draft.index;
     this.save.bestDepth = Math.max(this.save.bestDepth, this.depth + 1);
     this.save.totalKills = this.metaKills;
@@ -370,10 +385,14 @@ export class Scene {
       if (dx < 14 && dy < 14) this.entities.kill(e);
     }
 
-    // Pads are placed on every floor, not once per session: you should always be
-    // able to hop somewhere else without dying first.
+    // No test pads in the opening any more.
+    //
+    // Three gold rings and a wall of biome names were the first thing a new
+    // player ever saw, in the one room whose whole job is to establish that this
+    // is a place. Debug scaffolding in the first ten seconds costs more than it
+    // saves — and nothing is lost, because Esc -> Teleport reaches every biome
+    // from anywhere, which is strictly better for testing anyway.
     if (this.fixture) this.applyFixture(this.fixture);
-    else this.placeTestTeleporters();
     this.teleportCooldown = 50;
     this.wasOnPad = true; // assume arrival on a pad until proven otherwise
     const room = this.world.roomAt(this.player.x, this.player.y);
@@ -680,7 +699,7 @@ export class Scene {
     this.blasts.push({ x: e.x, y: e.y - 6, frame: 0 });
     this.camera.shake(4, 12);
     this.hitstop.request(HITSTOP_HEAVY);
-    sfx.enemyDie();
+    sfx.blast();
     this.particles.burst(e.x, e.y - 6, { key: 'fx.spark', count: 20, speed: 2.2, lift: 2.4 });
 
     for (const target of this.entities.overlapCircle(e.x, e.y - 6, BLAST_RADIUS, this.hitScratch)) {
@@ -862,6 +881,7 @@ export class Scene {
     ]);
     this.hintLines = [familiar, strange];
     this.hintFrames = 300;
+    sfx.wake();
   }
 
   /**
@@ -935,6 +955,58 @@ export class Scene {
         lights.add(this.player.x, this.player.y - 8, 56 * pulse, [0.45, 0.85, 1.05], 0.3 + dark);
       }
     }
+  }
+
+  /**
+   * Watch what the player is doing and near, and let the tutor decide whether
+   * anything is worth saying. The scene owns the *observations*; the tutor owns
+   * the judgement, which keeps the teaching rules in one readable list rather
+   * than scattered through combat code.
+   */
+  private updateTutor(input: InputSnapshot): void {
+    const walking = input.up || input.down || input.left || input.right;
+    if (walking) this.movedOnce = true;
+
+    // Footsteps on the walk cycle's contact frames. Tied to distance travelled
+    // rather than to a timer, so the cadence matches the legs at any speed and
+    // never drifts out of step with the animation.
+    if (walking && !this.player.sword.swinging) {
+      this.stepPhase += 1;
+      if (this.stepPhase >= 14) {
+        this.stepPhase = 0;
+        this.stepFoot ^= 1;
+        sfx.step(this.stepFoot);
+      }
+    } else {
+      this.stepPhase = 12; // next step lands promptly when they set off again
+    }
+
+    if (this.player.sword.swinging) this.swungOnce = true;
+    if (this.player.carrying) this.liftedOnce = true;
+    if (input.itemPressed) this.usedItemOnce = true;
+
+    const near = (kind: string, radius: number): boolean =>
+      this.entities.all.some((e) => {
+        if (!e.alive || e.carried || e.kind !== kind) return false;
+        return Math.hypot(e.x - this.player.x, e.y - this.player.y) < radius;
+      });
+
+    this.tutor.update({
+      moved: this.movedOnce,
+      swung: this.swungOnce,
+      lifted: this.liftedOnce,
+      usedItem: this.usedItemOnce,
+      nearLiftable: this.entities.all.some((e) =>
+        e.alive && !e.carried && e.liftable
+        && Math.hypot(e.x - this.player.x, e.y - this.player.y) < 40),
+      enemyNear: near('enemy', 110),
+      bracing: this.player.bracing,
+      exitVisible: Math.hypot(
+        this.floor.exit.x - this.player.x,
+        this.floor.exit.y - this.player.y,
+      ) < 90,
+      hasBombs: this.loadout.bombs > 0,
+    });
   }
 
   private beginRevision(): void {
@@ -1072,6 +1144,7 @@ export class Scene {
       this.blasts = this.blasts.filter((b) => b.frame < BLAST_FRAMES);
 
       this.spawnAmbient();
+      this.updateTutor(input);
 
       this.checkTeleporters();
       this.tryBarRoom();
@@ -1785,6 +1858,13 @@ export class Scene {
           ? this.actBanner
           : this.clearPulse > 0 ? this.clearPulse : this.barredRoom ? 40 : 0,
       });
+
+      // Teaching sits above the waking words and below the action, and never
+      // covers the player: it fades in, fades out, and blocks nothing.
+      const lesson = this.tutor.current();
+      if (lesson) {
+        drawTextCentred(batch, viewport.w / 2, viewport.h - 54, lesson.text, lesson.alpha);
+      }
 
       // The waking words, low on the screen, fading out at the end.
       if (this.hintLines && this.hintFrames > 0) {
