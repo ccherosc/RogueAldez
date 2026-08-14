@@ -55,11 +55,7 @@ export function drawOffer(
   current: GearItem | null,
   yes: boolean,
 ): void {
-  for (let y = 0; y < viewport.h; y += 8) {
-    for (let x = 0; x < viewport.w; x += 8) {
-      batch.draw('fx.dim', x, y, { alpha: 0.72 });
-    }
-  }
+  batch.fill(0, 0, viewport.w, viewport.h, 0.72);
   const cx = viewport.w / 2;
   const top = viewport.h / 2 - 40;
 
@@ -80,11 +76,7 @@ export function drawOffer(
 }
 
 export function drawPack(batch: SpriteBatch, view: PackView, frame: number): void {
-  for (let y = 0; y < viewport.h; y += 8) {
-    for (let x = 0; x < viewport.w; x += 8) {
-      batch.draw('fx.dim', x, y, { alpha: 0.8 });
-    }
-  }
+  batch.fill(0, 0, viewport.w, viewport.h, 0.8);
 
   const cx = viewport.w / 2;
   drawTextCentred(batch, cx, 16, 'the pack', 0.95);

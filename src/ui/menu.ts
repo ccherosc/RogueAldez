@@ -126,11 +126,12 @@ export function drawMenu(
   pad?: PadStatus,
 ): void {
   // Dim the hub rather than hide it.
-  for (let y = 0; y < viewport.h; y += 8) {
-    for (let x = 0; x < viewport.w; x += 8) {
-      batch.draw('fx.dim', x, y, { alpha: 0.72 });
-    }
-  }
+  batch.fill(0, 0, viewport.w, viewport.h, 0.72);
+  // A darker column under the title and the rows. The backdrop is a real region
+  // now rather than the same quiet meadow, so it can be busy or bright, and gold
+  // text on an arbitrary biome is not a contrast the flat wash alone can win.
+  const panelW = 176;
+  batch.fill((viewport.w - panelW) / 2, 24, panelW, viewport.h - 56, 0.5);
 
   const cx = viewport.w / 2;
 
@@ -160,7 +161,7 @@ export function drawMenu(
     const y = top + index * rowH;
     const selected = index === state.cursor;
     if (selected) {
-      for (let x = cx - 80; x < cx + 80; x += 8) batch.draw('fx.dim', x, y - 3, { alpha: 0.55 });
+      batch.fill(cx - 80, y - 3, 160, 8, 0.55);
       drawText(batch, cx - 92, y, '>', 0.95);
     }
     drawTextCentred(batch, cx, y, label, selected ? 1 : 0.62);

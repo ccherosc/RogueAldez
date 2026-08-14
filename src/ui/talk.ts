@@ -29,11 +29,7 @@ export interface TalkView {
 
 export function drawTalk(batch: SpriteBatch, view: TalkView): void {
   const top = viewport.h - 60;
-  for (let y = top; y < viewport.h; y += 8) {
-    for (let x = 0; x < viewport.w; x += 8) {
-      batch.draw('fx.dim', x, y, { alpha: 0.82 });
-    }
-  }
+  batch.fill(0, top, viewport.w, viewport.h - top, 0.82);
   for (let x = 0; x < viewport.w; x += 8) batch.draw('ui.rule', x, top, { alpha: 0.5 });
 
   const left = 16;

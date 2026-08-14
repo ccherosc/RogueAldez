@@ -1,3 +1,4 @@
+import { ROOM_W, ROOM_H } from '../core/const.ts';
 /**
  * A deliberately small entity store: a flat array, integer ids, no ECS library.
  *
@@ -57,6 +58,13 @@ export interface Entity {
 
   /** enemy/projectile type, e.g. 'octorok' — drives both brain and sprite key */
   variant: string;
+  /**
+   * The room this enemy belongs to, in room coordinates. Set at spawn; brains
+   * refuse to move it out. Undefined means unbound — projectiles, thrown props
+   * and anything that legitimately crosses a seam.
+   */
+  homeRoomX?: number;
+  homeRoomY?: number;
   /**
    * Who a projectile belongs to. Deflecting a pellet with the shield flips this
    * to 'player', which is what turns a blocked shot into a counter-attack rather
@@ -121,6 +129,27 @@ export const ENEMY_FLASH_FRAMES = 6;
 export const ENEMY_HITSTUN_FRAMES = 12;
 export const ENEMY_KNOCK_DISTANCE = 16;
 export const ENEMY_KNOCK_FRAMES = 8;
+
+/**
+ * Hold an enemy inside the room it spawned in.
+ *
+ * Undefined home means unbound, which is correct for projectiles, thrown props
+ * and anything else that legitimately crosses a seam — a deflected pellet should
+ * still fly where it was aimed.
+ */
+export function confineToRoom(e: Entity): void {
+  if (e.homeRoomX === undefined || e.homeRoomY === undefined) return;
+  const minX = e.homeRoomX * ROOM_W + e.halfW;
+  const maxX = (e.homeRoomX + 1) * ROOM_W - e.halfW;
+  const minY = e.homeRoomY * ROOM_H + e.boxH;
+  // Minus one, because y is the feet and a room spans [ry*H, (ry+1)*H). Landing
+  // exactly on (ry+1)*H puts the entity's own room index one past its home — it
+  // has not moved a pixel into the next screen, but every room test in the game
+  // says it has, including the clear-lock and the fog.
+  const maxY = (e.homeRoomY + 1) * ROOM_H - 1;
+  e.x = Math.min(maxX, Math.max(minX, e.x));
+  e.y = Math.min(maxY, Math.max(minY, e.y));
+}
 
 export class EntityStore {
   private list: Entity[] = [];
@@ -275,6 +304,13 @@ export class EntityStore {
         e.x += e.vx;
         e.y += e.vy;
       }
+
+      // Last word on where an enemy may be. The brain clamps its own steps, but
+      // knockback moves entities here and would otherwise punt one clean across
+      // a seam — where it belongs to a room it never spawned in and can reach a
+      // player who has already left. Applying it after every source of movement
+      // is what makes "one fight, one screen" actually true.
+      confineToRoom(e);
     }
 
     // Compact once per frame rather than splicing mid-iteration.

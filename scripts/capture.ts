@@ -263,6 +263,51 @@ function frozenRun(fs: Frame[]): number {
 // ---------------------------------------------------------------------------
 
 /** Sword mechanics against one pinned enemy. */
+/**
+ * Errata stay on the screen they spawned on.
+ *
+ * The complaint this comes from was "I am sometimes getting hit during
+ * transitions", and the cause was that enemies were free to walk across a room
+ * seam and land a contact hit on the first frame after the scroll — from a room
+ * the player had already left. Rooms are the unit of the camera, the clear-lock
+ * and the dungeon fog, so they should be the unit of a fight too.
+ *
+ * Asserted by reading every enemy's room each frame while the player runs the
+ * length of the floor, rather than by watching for a hit: a hit is the symptom
+ * and it only shows up on the seeds where the timing lines up.
+ */
+async function testRooms(browser: Browser): Promise<void> {
+  const page = await openFixture(browser, 'rooms');
+
+  const strays = await page.evaluate(async () => {
+    const s = (window as any).__aldez.scene;
+    const ROOM_W = 256;
+    const ROOM_H = 224;
+    let wandered = 0;
+    let sampled = 0;
+
+    for (let i = 0; i < 600; i++) {
+      for (const e of s.entities.all) {
+        if (!e.alive || e.kind !== 'enemy') continue;
+        if (e.homeRoomX === undefined) continue;
+        sampled++;
+        const rx = Math.floor(e.x / ROOM_W);
+        const ry = Math.floor(e.y / ROOM_H);
+        if (rx !== e.homeRoomX || ry !== e.homeRoomY) wandered++;
+      }
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+    }
+    return { wandered, sampled };
+  });
+
+  check('rooms: every enemy is bound to a room', strays.sampled > 0,
+    `${strays.sampled} samples`);
+  check('rooms: no enemy leaves the screen it spawned on', strays.wandered === 0,
+    `${strays.wandered} of ${strays.sampled}`);
+  await shot(page, 'rooms');
+  await page.close();
+}
+
 async function testCombat(browser: Browser): Promise<void> {
   const page = await openFixture(browser, 'combat');
   const start = await snap(page);
@@ -680,6 +725,7 @@ async function main(): Promise<void> {
   const scenarios: Array<[string, (b: Browser) => Promise<void>]> = [
     ['movement', testMovement],
     ['combat', testCombat],
+    ['rooms', testRooms],
     ['spin', testSpin],
     ['props', testProps],
     ['items', testItems],

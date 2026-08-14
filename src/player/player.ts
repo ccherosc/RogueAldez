@@ -109,6 +109,16 @@ export class Player {
   }
 
   /**
+   * Grant i-frames without the hurt that normally buys them.
+   *
+   * Only ever extends: a room arrival must not cut short the invulnerability the
+   * player earned by being hit a moment earlier.
+   */
+  grantInvulnerability(frames: number): void {
+    this.iframes = Math.max(this.iframes, frames);
+  }
+
+  /**
    * Flash cadence during i-frames: two frames visible, two hidden. Fast enough to
    * read as "you are hurt", slow enough that you can still track yourself.
    */

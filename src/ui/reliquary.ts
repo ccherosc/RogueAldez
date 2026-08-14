@@ -31,11 +31,7 @@ export function drawReliquary(batch: SpriteBatch, view: ReliquaryView): void {
   // Near-opaque. The revision scene deliberately shows the world being edited
   // underneath; this screen is a different beat — Aldez is choosing what to carry,
   // not watching. Terrain bleeding through just competes with eight rows of text.
-  for (let y = 0; y < viewport.h; y += 8) {
-    for (let x = 0; x < viewport.w; x += 8) {
-      batch.draw('fx.dim', x, y, { alpha: 1 });
-    }
-  }
+  batch.fill(0, 0, viewport.w, viewport.h, 1);
 
   drawTextCentred(batch, viewport.w / 2, 16, 'the reliquary of selves', 0.95);
   drawText(batch, LIST_X, 26, `${view.amber} star amber`, 0.8);
@@ -48,9 +44,7 @@ export function drawReliquary(batch: SpriteBatch, view: ReliquaryView): void {
 
     if (selected) {
       // Highlight bar behind the row, so the cursor is unmissable at 8px text.
-      for (let x = LIST_X - 6; x < viewport.w - 16; x += 8) {
-        batch.draw('fx.dim', x, y - 2, { alpha: 0.55 });
-      }
+      batch.fill(LIST_X - 6, y - 2, viewport.w - 16 - (LIST_X - 6), 8, 0.55);
       batch.draw('ui.rule', LIST_X - 6, y - 3, { alpha: 0.8 });
     }
 

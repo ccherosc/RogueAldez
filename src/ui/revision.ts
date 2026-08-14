@@ -50,11 +50,7 @@ export function drawRevision(batch: SpriteBatch, view: RevisionView): void {
   // Darken the frozen world underneath rather than clearing it: the player should
   // watch the place they died being edited, not a blank screen.
   const fade = Math.min(1, frame / FADE_FRAMES) * 0.88;
-  for (let y = 0; y < viewport.h; y += 8) {
-    for (let x = 0; x < viewport.w; x += 8) {
-      batch.draw('fx.dim', x, y, { alpha: fade });
-    }
-  }
+  batch.fill(0, 0, viewport.w, viewport.h, fade);
   if (frame < FADE_FRAMES) return;
 
   const t = frame - FADE_FRAMES;

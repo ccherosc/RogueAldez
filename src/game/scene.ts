@@ -83,6 +83,16 @@ import type { MenuState, PadStatus } from '../ui/menu.ts';
 import { drawRevision, revisionReadyAt } from '../ui/revision.ts';
 import type { SolidQuery } from '../physics/collide.ts';
 
+/** How long each region sits behind the title before the next one. */
+const TITLE_CYCLE = 420;
+
+/** Distance at which the gate explains itself, and at which it opens. */
+const TOWN_GATE_PROMPT = 44;
+const TOWN_GATE_ENTER = 18;
+
+/** Invulnerable frames granted on arriving in a new room. Quarter of a second. */
+const ARRIVAL_GRACE = 15;
+
 const ROOM_PX_W = ROOM_TILES_W * TILE;
 const ROOM_PX_H = ROOM_TILES_H * TILE;
 const DOORWAY_NUDGE = 16;
@@ -322,10 +332,47 @@ export class Scene {
     this.player = new Player(0, 0);
     this.draft = rollDraft(this.save.draftsLived, this.rng, this.save.draftsLived - 1);
     this.loadDraft(this.draft);
-    // Boot lands on the menu, drawn over the living hub. Fixtures skip it — a
-    // test must land in gameplay immediately.
-    if (!this.fixture) this.mode = 'menu';
+    // Boot lands on the menu. Fixtures skip it — a test must land in gameplay
+    // immediately.
+    // Order matters: loadDraft ends by setting mode to 'playing', so the
+    // showcase has to be loaded before the menu is raised over it.
+    if (!this.fixture) {
+      this.showcase();
+      this.mode = 'menu';
+    }
   }
+
+  /**
+   * Load a random region to sit behind the title.
+   *
+   * The menu used to be drawn over the hub, which meant the first thing anyone
+   * ever saw was the same meadow every time — and the meadow is deliberately the
+   * least remarkable place in the game. Sixteen biomes, big Errata and a whole
+   * enemy roster existed and none of it was on the title screen.
+   *
+   * It is scenery, not a level: a deeper floor so the roster is interesting, and
+   * a fresh one each time the player backs out to the menu. `start` throws it
+   * away and loads the real meadow, so nothing here can leak into a run.
+   */
+  private showcase(): void {
+    // Keyed on the life as well as the visit count. The world seed is a fixed
+    // constant, so without draftsLived every player's first title screen would
+    // be the same region forever.
+    const rng = this.rng.stream(`showcase:${this.save.draftsLived}:${this.showcaseCount++}`);
+    this.forcedBiome = rng.pick(BIOMES).id;
+    this.loadDraft(this.draft, 3 + rng.int(0, 3));
+  }
+
+  private showcaseCount = 0;
+  /**
+   * True until the player starts a run.
+   *
+   * The pause menu and the title are the same screen, and only one of them may
+   * throw the world away to load a new backdrop. Without this flag, pressing Esc
+   * mid-run would eventually destroy the floor being played.
+   */
+  private atTitle = true;
+  private titleTimer = 0;
 
   /** Recompute cached relic numbers and push the ones the player owns. */
   private applyRelics(): void {
@@ -440,7 +487,7 @@ export class Scene {
       if (e.variant !== 'hulk' && e.variant !== 'colossus') {
         e.hp = Math.min(e.hp, diff.maxHp);
       }
-      this.brains.register(e);
+      this.registerIn(e);
     }
 
     // Fauna — but never under a fixture. Critters wander, and a sealed test
@@ -530,7 +577,7 @@ export class Scene {
         const e = this.entities.spawn(
           Brains.spawnInit(spawn.variant, this.player.x + spawn.dx, this.player.y + spawn.dy),
         );
-        this.brains.register(e);
+        this.registerIn(e);
       }
     }
 
@@ -674,7 +721,7 @@ export class Scene {
       const y = this.player.y + dy;
       if (!this.world.isWalkable(Math.floor(x / TILE), Math.floor(y / TILE))) continue;
       const e = this.entities.spawn(Brains.spawnInit(pick.key, x, y));
-      this.brains.register(e);
+      this.registerIn(e);
     }
   }
 
@@ -918,11 +965,27 @@ export class Scene {
       sfx.menuMove();
       return;
     }
+    // Drift through the world while nobody is playing. One region is a
+    // wallpaper; a rotation is the pitch — sixteen biomes and a whole roster of
+    // Errata, none of which used to appear before you pressed start.
+    if (this.atTitle && this.menu.screen === 'root') {
+      this.titleTimer++;
+      if (this.titleTimer >= TITLE_CYCLE) {
+        this.titleTimer = 0;
+        this.showcase();
+        this.mode = 'menu';   // loadDraft ends in 'playing'
+      }
+    }
+
     if (!input.attackPressed) return;
 
     switch (this.menu.screen) {
       case 'root':
         if (this.menu.cursor === 0) {
+          // The backdrop is a random deep region; the game starts in the meadow.
+          this.atTitle = false;
+          this.forcedBiome = null;
+          this.loadDraft(this.draft, 0);
           this.mode = 'playing';
           this.showRebirthHint();
         } else {
@@ -1232,6 +1295,18 @@ export class Scene {
    * should mean surviving mistakes, not ignoring the game. Halving the incoming
    * hit is the difference between a long fight and no fight at all.
    */
+  /**
+   * Bind an enemy to the room it stands in, then register its brain.
+   *
+   * Done here rather than in spawnInit because only the scene knows the room
+   * grid, and doing it at every call site is how one gets forgotten.
+   */
+  private registerIn(e: Entity): void {
+    e.homeRoomX = Math.floor(e.x / ROOM_PX_W);
+    e.homeRoomY = Math.floor(e.y / ROOM_PX_H);
+    this.brains.register(e);
+  }
+
   private afterArmour(damage: number): number {
     // Mode last, and still floored at one. On casual a hit has to remain a hit:
     // the point is to survive mistakes, not to stop noticing them.
@@ -1550,7 +1625,7 @@ export class Scene {
       e.variant = 'moblin';
       e.contactDamage = 4;
       e.hp = 10;
-      this.brains.register(e);
+      this.registerIn(e);
     }
   }
 
@@ -1584,6 +1659,8 @@ export class Scene {
     // Escape toggles the menu from play and back.
     if (input.menuPressed) {
       if (this.mode === 'playing') {
+        // Backing out mid-run keeps the run: re-rolling the backdrop would throw
+        // the floor away. A fresh region only when there is nothing to lose.
         this.mode = 'menu';
         this.menu.screen = 'root';
         this.menu.cursor = 0;
@@ -1734,6 +1811,11 @@ export class Scene {
       this.particles.update();
       if (!this.camera.transitioning) {
         this.player.inputLocked = false;
+        // A breath on arrival. Enemies are held to their own screens now, but
+        // one waiting just inside the doorway could still land a hit on the
+        // frame control comes back — before the player has seen the room, which
+        // is the definition of an unfair hit.
+        this.player.grantInvulnerability(ARRIVAL_GRACE);
         bus.emit('room:transition:ended', { rx: this.roomX, ry: this.roomY });
       }
       return;
@@ -1776,7 +1858,10 @@ export class Scene {
       // Step onto the road marker to travel to the town.
       if (this.townGate?.alive && this.teleportCooldown <= 0) {
         const d = Math.hypot(this.townGate.x - this.player.x, this.townGate.y - this.player.y);
-        if (d < 12) {
+        // Was 12px — under a tile, so the gate could be walked straight past and
+        // it took a deliberate attempt to land on it. A whole tile of tolerance
+        // is what makes "step on to enter" true.
+        if (d < TOWN_GATE_ENTER) {
           this.enterTown();
           return;
         }
@@ -2467,7 +2552,17 @@ export class Scene {
     }
 
     if (this.townGate?.alive) {
+      // The name alone was not enough. "to amberwake" tells you where the thing
+      // goes and nothing about what to do with it, so a player can stand beside
+      // the only route out of the meadow and read it as scenery. Standing close
+      // enough swaps the sign for an instruction.
+      const near = Math.hypot(
+        this.townGate.x - this.player.x, this.townGate.y - this.player.y,
+      ) < TOWN_GATE_PROMPT;
       drawTextCentred(batch, this.townGate.x, this.townGate.y + 4, 'to amberwake', 0.9);
+      if (near) {
+        drawTextCentred(batch, this.townGate.x, this.townGate.y + 12, 'step on to enter', 0.75);
+      }
     }
 
     // Teleporter labels, in world space so they sit under their pad. Hidden

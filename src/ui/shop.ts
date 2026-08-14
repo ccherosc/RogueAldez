@@ -43,11 +43,7 @@ function stats(item: GearItem): string {
 }
 
 export function drawShop(batch: SpriteBatch, view: ShopView, frame: number): void {
-  for (let y = 0; y < viewport.h; y += 8) {
-    for (let x = 0; x < viewport.w; x += 8) {
-      batch.draw('fx.dim', x, y, { alpha: 0.84 });
-    }
-  }
+  batch.fill(0, 0, viewport.w, viewport.h, 0.84);
 
   const cx = viewport.w / 2;
   drawTextCentred(batch, cx, 14, view.trader, 1);

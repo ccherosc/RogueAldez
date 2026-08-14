@@ -243,6 +243,42 @@ export class SpriteBatch {
     this.drawCell(this.atlas.cell(key), x, y, opts);
   }
 
+  /**
+   * A flat wash of one colour over a rectangle, as a single quad.
+   *
+   * Every dimmed panel in the game used to be built by tiling the 8x8 `fx.dim`
+   * sprite across the whole screen — around a thousand quads, each sampling to
+   * the exact edge of its atlas cell. At the edges that picks up a sliver of
+   * whatever cell was packed next door, and repeated every eight pixels the
+   * slivers line up into a lattice of bright dots. On the title screen, which is
+   * the largest dimmed area in the game, it read as a grid laid over the art and
+   * made the menu text hard to hold on to.
+   *
+   * One quad cannot have interior seams, and the UVs collapse to a single texel
+   * well inside the cell, so there is no neighbour within reach to bleed from.
+   */
+  fill(x: number, y: number, w: number, h: number, alpha: number): void {
+    if (w <= 0 || h <= 0) return;
+    if (this.quads >= MAX_QUADS) this.flush();
+
+    const cell = this.atlas.cell('fx.dim');
+    // Dead centre of the cell, as a zero-area UV range.
+    const u = (cell.x + cell.w / 2) / this.atlas.width;
+    const v = (cell.y + cell.h / 2) / this.atlas.height;
+
+    const dx = Math.round(x) - this.camX;
+    const dy = Math.round(y) - this.camY;
+    const d = this.data;
+    let o = this.quads * FLOATS_PER_QUAD;
+
+    d[o++] = dx;     d[o++] = dy;     d[o++] = u; d[o++] = v; d[o++] = 0; d[o++] = alpha;
+    d[o++] = dx + w; d[o++] = dy;     d[o++] = u; d[o++] = v; d[o++] = 0; d[o++] = alpha;
+    d[o++] = dx + w; d[o++] = dy + h; d[o++] = u; d[o++] = v; d[o++] = 0; d[o++] = alpha;
+    d[o++] = dx;     d[o++] = dy + h; d[o++] = u; d[o++] = v; d[o++] = 0; d[o++] = alpha;
+
+    this.quads++;
+  }
+
   drawCell(cell: AtlasCell, x: number, y: number, opts?: DrawOptions): void {
     // Atlas cells are texels; positions and sizes here are world pixels. The
     // framebuffer is ART_SCALE denser than the world, so a quad w world pixels

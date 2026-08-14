@@ -67,6 +67,17 @@ export interface Fixture {
 }
 
 export const FIXTURES: Record<string, Fixture> = {
+  /** A populated floor, brains running, used to prove enemies stay put. */
+  rooms: {
+    id: 'rooms',
+    description: 'a generated floor with its own enemies, brains live',
+    seed: 0x3c19b,
+    act: 1,
+    biomeId: 'meadow',
+    depth: 2,
+    health: 24,
+  },
+
   /** Amberwake in its good years: houses standing, street busy, merchants trading. */
   town: {
     id: 'town',

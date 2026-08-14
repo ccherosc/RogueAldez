@@ -1,3 +1,5 @@
+import { confineToRoom } from '../entity/store.ts';
+import { ROOM_W, ROOM_H } from '../core/const.ts';
 /**
  * Enemy behaviour.
  *
@@ -285,11 +287,31 @@ export class Brains {
     }
   }
 
+  /**
+   * Move an enemy, and hold it in the room it was spawned in.
+   *
+   * Rooms are the unit of everything else here — the camera locks to one, the
+   * clear-lock counts one, dungeon fog renders one — but enemies were free to
+   * walk between them. So an Octorok could follow the player into a doorway and
+   * land a contact hit on the first frame after the scroll, before the player
+   * had control back. From the receiving end that is a hit that came out of a
+   * room you were no longer in, from something you could not see coming.
+   *
+   * Committing them to a screen fixes that at the source, and it is better
+   * design regardless: a room you cleared stays cleared, and a fight is bounded
+   * by the screen it started on.
+   */
   private step(e: Entity, dx: number, dy: number, isSolid: SolidQuery): boolean {
     const result = moveActor(isSolid, { x: e.x, y: e.y, halfW: e.halfW, boxH: e.boxH }, dx, dy);
-    const blocked = result.hitX || result.hitY;
+    let blocked = result.hitX || result.hitY;
+
     e.x = result.x;
     e.y = result.y;
+    // Confining here as well as in the store is what makes the brain *know* it
+    // was stopped: a wanderer that walks into the seam needs `blocked` back so
+    // it picks a new direction instead of grinding against the edge forever.
+    confineToRoom(e);
+    if (e.x !== result.x || e.y !== result.y) blocked = true;
     return blocked;
   }
 
