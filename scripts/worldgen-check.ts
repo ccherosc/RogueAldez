@@ -25,7 +25,9 @@ import { difficultyFor, tierFor, MODE_SCALES, DEFAULT_MODE } from '../src/chroni
 import { bearing, selfTalk, IDLE_LINES } from '../src/chronicle/hints.ts';
 import { beatFor, objectiveLine, beatThought } from '../src/chronicle/thread.ts';
 import type { DifficultyMode } from '../src/chronicle/difficulty.ts';
-import { generateTown } from '../src/gen/town.ts';
+import {
+  generateTown, TOWN_PLOTS, plotTiles, isStreet, TOWN_COLS, TOWN_ROWS,
+} from '../src/gen/town.ts';
 import { TileKind } from '../src/world/tilemap.ts';
 import { TOWNSFOLK, TOWN_CONDITIONS, CONDITION_PROFILES } from '../src/worldgen/townsfolk.ts';
 import type { Essence, Role } from '../src/worldgen/townsfolk.ts';
@@ -438,6 +440,46 @@ check('same world seed yields an identical climate map', sameClimate);
   check('the waking meadow stays gentle at every Act', worstMeadow <= 4,
     `worst meadow room ${worstMeadow}`);
   check('everything in the meadow dies in one hit', meadowMultiHit === 0);
+}
+
+// ---------------------------------------------------------------------------
+// Getting into Amberwake
+// ---------------------------------------------------------------------------
+// The town was fully connected and still unplayable: buildings are stamped after
+// the streets are carved, and a plot sat on the gate avenue, so walking in gave
+// you three tiles before the back of a house. "I made it to the town but could
+// not move anywhere" is what that feels like from the outside.
+{
+  const W = TOWN_COLS * ROOM_TILES_W;
+  const H = TOWN_ROWS * ROOM_TILES_H;
+
+  const trespassing = TOWN_PLOTS.filter((plot) =>
+    plotTiles(plot).some(([x, y]) => isStreet(x, y, W, H)));
+  check('no building stands on a street', trespassing.length === 0,
+    `${trespassing.length} of ${TOWN_PLOTS.length} plots`);
+
+  // And the thing the player actually does: walk in and keep walking.
+  let worstRun = Infinity;
+  let blockedToSquare = 0;
+  let towns = 0;
+  for (const condition of TOWN_CONDITIONS) {
+    for (let i = 0; i < 25; i++) {
+      const { world, gate } = generateTown(condition, makeRng(0xa100 + i));
+      const gx = Math.floor(gate.x / TILE);
+      const gy = Math.floor(gate.y / TILE) - 2;
+      let run = 0;
+      while (gy - run - 1 >= 0 && world.isWalkable(gx, gy - run - 1)) run++;
+      worstRun = Math.min(worstRun, run);
+      // The square is the middle of the town; reaching it is what "getting in"
+      // means. Anything less and the gate opens onto a cupboard.
+      if (gy - run > Math.floor(H / 2) + 2) blockedToSquare++;
+      towns++;
+    }
+  }
+  check('the gate opens onto a street you can walk up', worstRun >= 4,
+    `shortest run ${worstRun} tiles`);
+  check('the square is always reachable straight from the gate',
+    blockedToSquare === 0, `${blockedToSquare} of ${towns} blocked short`);
 }
 
 // ---------------------------------------------------------------------------

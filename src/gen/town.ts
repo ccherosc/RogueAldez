@@ -65,15 +65,52 @@ interface Plot {
  * noise at this scale. The variation comes from condition, not from geometry.
  */
 const PLOTS: readonly Plot[] = [
-  { tx: 4, ty: 4, w: 7, h: 5, doorSide: 's' },
-  { tx: 13, ty: 4, w: 6, h: 5, doorSide: 's' },
-  { tx: 21, ty: 3, w: 8, h: 6, doorSide: 's' },
-  { tx: 32, ty: 4, w: 7, h: 5, doorSide: 's' },
-  { tx: 4, ty: 16, w: 6, h: 5, doorSide: 'n' },
-  { tx: 12, ty: 16, w: 8, h: 5, doorSide: 'n' },
-  { tx: 22, ty: 17, w: 6, h: 4, doorSide: 'n' },
-  { tx: 30, ty: 16, w: 9, h: 5, doorSide: 'n' },
+  // North side, doors onto the square.
+  { tx: 4, ty: 3, w: 7, h: 6, doorSide: 's' },
+  { tx: 13, ty: 3, w: 7, h: 6, doorSide: 's' },
+  { tx: 28, ty: 3, w: 7, h: 6, doorSide: 's' },
+  { tx: 37, ty: 3, w: 7, h: 6, doorSide: 's' },
+  // South side, doors onto the square.
+  { tx: 4, ty: 20, w: 7, h: 5, doorSide: 'n' },
+  { tx: 13, ty: 20, w: 7, h: 5, doorSide: 'n' },
+  { tx: 28, ty: 20, w: 7, h: 5, doorSide: 'n' },
+  { tx: 37, ty: 20, w: 7, h: 5, doorSide: 'n' },
 ];
+
+/**
+ * Tiles no building may stand on: the gate-to-gate avenue, the main street, and
+ * the square where they meet.
+ *
+ * This exists because the authored plan and the street carving disagreed, and
+ * buildings are stamped *after* the streets — so a plot sitting on the avenue
+ * silently replaced it with roof. One did. Walking in through the south gate you
+ * got three tiles before hitting a wall, in every condition, on almost every
+ * seed: the town was fully connected and completely unreadable, because the way
+ * in led straight into the back of a house.
+ *
+ * Stated as a predicate rather than fixed by moving the plots alone, so the
+ * check can prove it and a future plot cannot quietly reintroduce it.
+ */
+export function isStreet(tx: number, ty: number, w: number, h: number): boolean {
+  const gateX = Math.floor(w / 2);
+  const streetY = Math.floor(h / 2);
+  const onAvenue = tx >= gateX - 2 && tx <= gateX + 2;
+  const onStreet = ty >= streetY - 2 && ty <= streetY + 2;
+  const inSquare = tx >= gateX - 6 && tx <= gateX + 6
+    && ty >= streetY - 5 && ty <= streetY + 5;
+  return onAvenue || onStreet || inSquare;
+}
+
+/** Every tile a plot would cover. */
+export function plotTiles(plot: Plot): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (let y = plot.ty; y < plot.ty + plot.h; y++) {
+    for (let x = plot.tx; x < plot.tx + plot.w; x++) out.push([x, y]);
+  }
+  return out;
+}
+
+export const TOWN_PLOTS = PLOTS;
 
 export function generateTown(condition: TownCondition, rng: Rng): GeneratedTown {
   const profile = CONDITION_PROFILES[condition];
@@ -160,22 +197,40 @@ export function generateTown(condition: TownCondition, rng: Rng): GeneratedTown 
     const step = plot.doorSide === 's' ? doorY + 1 : doorY - 1;
     world.setTile(doorX, step, TileKind.Cobble);
     if (standing) {
-      world.addProp('prop.torch.0', doorX + 1, step);
-      world.addProp('prop.crate', doorX - 1, step);
+      // Doorsteps are off the avenue by construction now, but guard it anyway:
+      // the plots may move again and a torch is solid.
+      if (doorX + 1 < gateX - 2 || doorX + 1 > gateX + 2) {
+        world.addProp('prop.torch.0', doorX + 1, step);
+      }
+      if (doorX - 1 < gateX - 2 || doorX - 1 > gateX + 2) {
+        world.addProp('prop.crate', doorX - 1, step);
+      }
     }
   }
 
   // The well: the fixed point of the town, in every condition. Recognising it is
   // how the player knows this is Amberwake before they know what year it is.
-  const wellX = gateX;
+  //
+  // Offset from the crossing rather than dead centre: the well *was* on the
+  // gate-to-gate line, which put a solid prop in the middle of the only way in.
+  const wellX = gateX + 4;
   const wellY = streetY;
   world.addProp('prop.stalagmite', wellX, wellY);
 
   // Bustle: stalls, crates, braziers along the street.
+  //
+  // Nothing solid may stand on the avenue. The plots were moved off it and the
+  // walk in was *still* blocked on some seeds, because decoration is placed by a
+  // different loop with its own rules and a crate blocks a doorway exactly as
+  // well as a house does. One reservation, applied everywhere something solid
+  // gets put down.
+  const blocksTheWay = (x: number, y: number): boolean =>
+    x >= gateX - 2 && x <= gateX + 2;
+
   for (let i = 0; i < profile.bustle; i++) {
     const x = 6 + rng.int(0, W - 14);
     const y = streetY + rng.pick([-4, -3, 3, 4]);
-    if (!world.isWalkable(x, y)) continue;
+    if (blocksTheWay(x, y) || !world.isWalkable(x, y)) continue;
     world.addProp(rng.pick(['prop.crate', 'prop.pot', 'prop.crate']), x, y);
   }
   // Fire damage: charred stumps where the market was.
@@ -183,7 +238,8 @@ export function generateTown(condition: TownCondition, rng: Rng): GeneratedTown 
     for (let i = 0; i < 10; i++) {
       const x = 5 + rng.int(0, W - 12);
       const y = 4 + rng.int(0, H - 10);
-      if (world.isWalkable(x, y)) world.addProp('prop.stalagmite', x, y);
+      if (blocksTheWay(x, y) || !world.isWalkable(x, y)) continue;
+      world.addProp('prop.stalagmite', x, y);
     }
   }
 

@@ -316,6 +316,37 @@ async function testRooms(browser: Browser): Promise<void> {
  * been folded into one call, which made the debt unpayable by any means except
  * not entering. The three transitions below are the whole contract.
  */
+/**
+ * You can walk into Amberwake and keep walking.
+ *
+ * The generator check proves the avenue is clear; this proves the *player* moves
+ * along it, which is a different claim and the one that failed. The town was
+ * fully connected and 100% reachable while the way in was three tiles deep, so
+ * every measurement of the map looked fine and the game was unplayable.
+ */
+async function testTownWalk(browser: Browser): Promise<void> {
+  const page = await openFixture(browser, 'town');
+
+  // Stand at the arrival tile, then hold north the way a player would.
+  await page.evaluate(`(() => {
+    const s = window.__aldez.scene;
+    s.player.x = s.town.gate.x;
+    s.player.y = s.town.gate.y - 24;
+  })()`);
+  await page.waitForTimeout(200);
+
+  const before = await page.evaluate(`window.__aldez.scene.player.y`) as number;
+  await hold(page, 'ArrowUp', 2500);
+  const after = await page.evaluate(`window.__aldez.scene.player.y`) as number;
+
+  // Two screens of travel is the difference between a street and a cupboard.
+  check('town: you can walk in from the gate', before - after > 120,
+    `${Math.round(before - after)}px north`);
+  check('town: still inside after walking', await page.evaluate(`window.__aldez.scene.inTown`) === true);
+  await shot(page, 'town-walk');
+  await page.close();
+}
+
 async function testBounty(browser: Browser): Promise<void> {
   const page = await openFixture(browser, 'town');
 
@@ -771,6 +802,7 @@ async function main(): Promise<void> {
     ['combat', testCombat],
     ['rooms', testRooms],
     ['bounty', testBounty],
+    ['townwalk', testTownWalk],
     ['spin', testSpin],
     ['props', testProps],
     ['items', testItems],
