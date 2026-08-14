@@ -5,7 +5,7 @@
  * world/ — the split is "does it have state that changes during a Draft".
  */
 
-export type EntityKind = 'prop' | 'pickup' | 'enemy' | 'projectile' | 'critter';
+export type EntityKind = 'prop' | 'pickup' | 'enemy' | 'projectile' | 'critter' | 'folk';
 
 /** Facing index, matching the sprite key order down/up/left/right. */
 export const DIRS = ['down', 'up', 'left', 'right'] as const;
@@ -75,6 +75,13 @@ export interface Entity {
   armored: boolean;
   /** knockback multiplier — 1 for ordinary things, near 0 for the massive */
   knockScale: number;
+  /**
+   * Index into the scene's resident table for `folk`.
+   *
+   * A townsperson's identity, role and dialogue live in the town, not on the
+   * entity — the entity is just the body standing in the square. -1 elsewhere.
+   */
+  residentIndex: number;
   /** free movement, used by projectiles and by brains that steer directly */
   vx: number;
   vy: number;
@@ -107,6 +114,7 @@ export interface SpawnInit {
   liftable?: boolean;
   armored?: boolean;
   knockScale?: number;
+  residentIndex?: number;
 }
 
 export const ENEMY_FLASH_FRAMES = 6;
@@ -161,6 +169,7 @@ export class EntityStore {
       carried: false,
       armored: init.armored ?? false,
       knockScale: init.knockScale ?? 1,
+      residentIndex: init.residentIndex ?? -1,
       animTimer: 0,
       animFrame: 0,
       drowning: 0,

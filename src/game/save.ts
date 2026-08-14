@@ -36,6 +36,13 @@ export interface SaveData {
   relics: string[];
   /** tutor lessons the player has demonstrated; never taught twice */
   taught?: string[];
+  /**
+   * Echo Memory: how many Drafts each townsperson has met Aldez in.
+   *
+   * The one thing the Chronicle cannot erase, and the reason to play a sixth
+   * life. Persisted where gear is not, because a relationship is not loot.
+   */
+  met?: Record<string, number>;
 }
 
 export function emptySave(worldSeed: number): SaveData {
@@ -50,6 +57,7 @@ export function emptySave(worldSeed: number): SaveData {
     actIndex: 0,
     relics: [],
   taught: [],
+  met: {},
   };
 }
 
@@ -86,6 +94,8 @@ export function loadSave(worldSeed: number): SaveData {
       actIndex: num(parsed.actIndex, base.actIndex),
       relics: Array.isArray(parsed.relics) ? parsed.relics.filter((r) => typeof r === 'string') : [],
     taught: Array.isArray(parsed.taught) ? parsed.taught.filter((r) => typeof r === 'string') : [],
+    met: typeof parsed.met === 'object' && parsed.met !== null
+      ? (parsed.met as Record<string, number>) : {},
     };
   } catch {
     return emptySave(worldSeed);

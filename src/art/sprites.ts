@@ -698,6 +698,73 @@ function wardenSprite(frame: number, open: boolean): PixelBuffer {
   return px;
 }
 
+/**
+ * Townsfolk, 16x24 like the player.
+ *
+ * Five silhouettes rather than ten portraits: a player must be able to tell a
+ * guard from a beggar across a market square, and at this size that is a job for
+ * *shape* — a helmet, a hood, an apron, a tall hat — not for faces. The name is
+ * on screen when you talk to them; the silhouette only has to say what they are
+ * doing today, which is exactly the thing that changes between Drafts.
+ */
+function folkSprite(kind: 'guard' | 'trader' | 'worker' | 'gentry' | 'poor', frame: number): PixelBuffer {
+  const P = PAL_PROP;
+  const px = new PixelBuffer(16, 24);
+  const w = (n: number) => ci(P, `wood.${n * 2}`);
+  const s = (n: number) => ci(P, `stone.${n * 2}`);
+  const pot = (n: number) => ci(P, `pot.${n * 2}`);
+  const sway = frame === 0 ? 0 : 1;
+
+  // Everyone shares legs and a body block; the head and shoulders carry the role.
+  px.rect(5, 18 + sway, 2, 5, w(0));
+  px.rect(9, 18 + sway, 2, 5, w(0));
+  px.rect(4, 20, 3, 2, ci(P, 'outline'));
+  px.rect(9, 20, 3, 2, ci(P, 'outline'));
+
+  const body = kind === 'guard' ? s(2) : kind === 'gentry' ? pot(2) : w(1);
+  px.rect(4, 10 + sway, 8, 9, body);
+  px.hline(4, 10 + sway, 8, kind === 'gentry' ? pot(2) : w(2));
+
+  // Head.
+  px.ellipse(5, 4 + sway, 6, 6, ci(PAL_PROP, 'pot.4'));
+
+  switch (kind) {
+    case 'guard':
+      // Helmet with a nasal bar, and a spear held upright.
+      px.rect(4, 3 + sway, 8, 4, s(2));
+      px.hline(4, 3 + sway, 8, s(2));
+      px.vline(8, 5 + sway, 3, s(1));
+      px.vline(13, 2 + sway, 16, w(1));
+      px.rect(12, 1 + sway, 3, 2, s(2));
+      break;
+    case 'trader':
+      // Wide hat and a satchel.
+      px.rect(2, 4 + sway, 12, 2, w(0));
+      px.rect(5, 2 + sway, 6, 2, w(1));
+      px.rect(11, 13 + sway, 4, 4, w(0));
+      break;
+    case 'worker':
+      // Headscarf and an apron.
+      px.rect(4, 3 + sway, 8, 3, pot(1));
+      px.rect(5, 13 + sway, 6, 6, pot(0));
+      break;
+    case 'gentry':
+      // Tall collar and a circlet: reads as money from across the square.
+      px.rect(4, 2 + sway, 8, 3, pot(2));
+      px.hline(4, 2 + sway, 8, ci(P, 'flame.4'));
+      px.rect(3, 10 + sway, 10, 2, pot(2));
+      break;
+    case 'poor':
+      // Hood pulled forward, hunched.
+      px.ellipse(3, 2 + sway, 10, 8, w(0));
+      px.rect(5, 7 + sway, 6, 3, ci(PAL_PROP, 'pot.2'));
+      break;
+  }
+
+  px.outline(ci(P, 'outline'), 'all');
+  return px;
+}
+
 export function enemyFrames(): SpriteFrame[] {
   const out: SpriteFrame[] = [];
   for (const dir of DIRS) {
@@ -1487,6 +1554,13 @@ export function propFrames(): SpriteFrame[] {
     { key: 'prop.teleporter.0', buffer: teleporterSprite(0), palette: PAL_PICKUP, anchor: a },
     { key: 'prop.teleporter.1', buffer: teleporterSprite(1), palette: PAL_PICKUP, anchor: a },
     { key: 'prop.tree', buffer: treeSprite(), palette: PAL_TERRAIN, anchor: [8, 23] },
+    ...(['guard', 'trader', 'worker', 'gentry', 'poor'] as const).flatMap((kind) =>
+      [0, 1].map((f) => ({
+        key: `folk.${kind}.${f}`,
+        buffer: folkSprite(kind, f),
+        palette: PAL_PROP,
+        anchor: [8, 23] as [number, number],
+      }))),
     { key: 'prop.flower', buffer: flowerSprite(), palette: PAL_TERRAIN, anchor: a },
     { key: 'sparrow.0', buffer: sparrowSprite(0), palette: PAL_PROP, anchor: a },
     { key: 'sparrow.1', buffer: sparrowSprite(1), palette: PAL_PROP, anchor: a },

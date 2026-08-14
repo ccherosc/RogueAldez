@@ -57,6 +57,12 @@ import type { LightBuffer } from '../render/lights.ts';
 import { drawMenu, menuLength, BOSS_ITEMS } from '../ui/menu.ts';
 import { Tutor, LESSON_IDS } from '../ui/tutor.ts';
 import { drawPack, drawOffer } from '../ui/pack.ts';
+import { drawTalk } from '../ui/talk.ts';
+import { generateTown, TOWN_COLS, TOWN_ROWS } from '../gen/town.ts';
+import type { TownResident } from '../gen/town.ts';
+import { CONDITION_PROFILES, TOWN_CONDITIONS } from '../worldgen/townsfolk.ts';
+import type { TownCondition } from '../worldgen/townsfolk.ts';
+import { speak } from '../worldgen/voices.ts';
 import { Inventory } from './inventory.ts';
 import {
   dropTier, makeWeapon, makeArmour, makeTreasure, makeEpicWeapon, makeEpicArmour, WEAPON_TYPES,
@@ -133,7 +139,7 @@ interface Drawable {
   flash?: number;
 }
 
-export type SceneMode = 'playing' | 'revising' | 'reliquary' | 'menu' | 'pack' | 'offer';
+export type SceneMode = 'playing' | 'revising' | 'reliquary' | 'menu' | 'pack' | 'offer' | 'talk';
 
 export class Scene {
   world!: World;
@@ -189,6 +195,18 @@ export class Scene {
   /** gear awaiting a yes/no swap decision */
   private offer: GearItem | null = null;
   private offerYes = true;
+  /** the town, when standing in one */
+  private town: { condition: TownCondition; residents: TownResident[]; gate: { x: number; y: number } } | null = null;
+  private talkingTo: TownResident | null = null;
+  private talkLine = '';
+  private nearFolk: TownResident | null = null;
+  /** guards hunting the player after an assault */
+  private townAlarm = 0;
+  private inTown = false;
+  /** the road marker in the meadow that leads to Amberwake */
+  private townGate: Entity | null = null;
+  /** person-Draft pairs already counted toward Echo Memory */
+  private metThisDraft = new Set<string>();
   private pickupBanner = 0;
   /** contextual teaching; learned flags persist so a veteran is never re-taught */
   readonly tutor: Tutor;
@@ -430,6 +448,19 @@ export class Scene {
     // saves — and nothing is lost, because Esc -> Teleport reaches every biome
     // from anywhere, which is strictly better for testing anyway.
     if (this.fixture) this.applyFixture(this.fixture);
+    // The road to Amberwake. Depth 0 only: the meadow is the one place with a
+    // way out that is not downward, which is what makes the town feel like a
+    // destination rather than another floor.
+    if (!this.fixture && depth === 0 && !this.inTown) {
+      const gx = this.floor.spawn.x + 120;
+      const gy = this.floor.spawn.y - 40;
+      this.townGate = this.entities.spawn({
+        kind: 'prop', spriteKey: 'prop.teleporter.0',
+        x: gx, y: gy, halfW: 8, boxH: 8, solid: false, breakable: false,
+      });
+    } else {
+      this.townGate = null;
+    }
     this.teleportCooldown = 50;
     this.wasOnPad = true; // assume arrival on a pad until proven otherwise
     const room = this.world.roomAt(this.player.x, this.player.y);
@@ -1168,6 +1199,135 @@ export class Scene {
     this.particles.burst(x, y - 12, { key: 'fx.spark', count: 24, speed: 2.2, lift: 2.6 });
   }
 
+  /**
+   * Walk into Amberwake.
+   *
+   * The condition is rolled from the Draft, so the town's state is a fact about
+   * this life rather than about this visit — leave and come back and it is the
+   * same year, which is what makes it a place instead of a slot machine.
+   */
+  enterTown(): void {
+    const rng = this.rng.stream(`town:${this.draft.seed}`);
+    const condition = rng.pick(TOWN_CONDITIONS);
+    const built = generateTown(condition, this.rng.stream(`town-build:${this.draft.seed}`));
+
+    this.world = built.world;
+    this.entities = new EntityStore(built.world.tilesW);
+    this.brains = new Brains(this.rng.stream(`town-ai:${this.draft.seed}`));
+    this.town = { condition, residents: built.residents, gate: built.gate };
+    this.inTown = true;
+
+    this.player.x = built.spawn.x;
+    this.player.y = built.spawn.y;
+    this.roomX = Math.floor(built.spawn.x / ROOM_PX_W);
+    this.roomY = Math.floor(built.spawn.y / ROOM_PX_H);
+    this.camera.snapTo(this.roomX, this.roomY);
+
+    built.residents.forEach((r, i) => {
+      this.entities.spawn({
+        kind: 'folk',
+        spriteKey: folkSpriteFor(r.role),
+        x: r.x,
+        y: r.y,
+        halfW: 6,
+        boxH: 13,
+        // Townsfolk take real punishment before they fall. Killing one should be
+        // a decision, not something that happens while you are swinging at a pot.
+        hp: 10,
+        solid: false,
+        breakable: true,
+        debris: 'fx.gore',
+        residentIndex: i,
+      });
+    });
+
+    this.townAlarm = 0;
+    this.hintLines = [`amberwake, ${CONDITION_PROFILES[condition].label}`,
+      CONDITION_PROFILES[condition].mood];
+    this.hintFrames = 320;
+    sfx.enterTown();
+    // The town has its own mood: same mode, a fifth lower, so it reads as the
+    // same world at a different hour rather than a different soundtrack.
+    music.setMood(this.biome.mode, this.biome.root * 0.75);
+  }
+
+  /** Back out of the gate and into the meadow you came from. */
+  leaveTown(): void {
+    this.town = null;
+    this.inTown = false;
+    this.nearFolk = null;
+    sfx.enterTown();
+    music.setMood(this.biome.mode, this.biome.root);
+    this.loadDraft(this.draft, this.depth);
+  }
+
+  /** Nearest townsperson within talking distance, or null. */
+  private folkInReach(): { resident: TownResident; entity: Entity } | null {
+    if (!this.town) return null;
+    let best: { resident: TownResident; entity: Entity; d: number } | null = null;
+    for (const e of this.entities.all) {
+      if (!e.alive || e.kind !== 'folk') continue;
+      const r = this.town.residents[e.residentIndex];
+      if (!r) continue;
+      const d = Math.hypot(e.x - this.player.x, e.y - this.player.y);
+      if (d > 26) continue;
+      if (!best || d < best.d) best = { resident: r, entity: e, d };
+    }
+    return best ? { resident: best.resident, entity: best.entity } : null;
+  }
+
+  private beginTalk(resident: TownResident): void {
+    const met = this.save.met?.[resident.id] ?? 0;
+    const roll = this.rng.stream(`talk:${resident.id}:${this.draft.seed}:${this.tick}`).next();
+    this.talkLine = speak({
+      role: resident.role,
+      essence: resident.essence as never,
+      condition: this.town!.condition,
+      met,
+      roll,
+    });
+    this.talkingTo = resident;
+    this.mode = 'talk';
+
+    // Meeting is what builds Echo Memory, and it is counted once per Draft per
+    // person — talking to Mara ten times in one life is not ten lives of knowing
+    // her, and letting it be would make the payoff grindable.
+    const key = `${resident.id}:${this.draft.index}`;
+    if (!this.metThisDraft.has(key)) {
+      this.metThisDraft.add(key);
+      this.save.met = this.save.met ?? {};
+      this.save.met[resident.id] = met + 1;
+    }
+  }
+
+  /**
+   * Strike a townsperson and the guards come.
+   *
+   * The alarm is town-wide rather than per-guard: a square full of people
+   * watched you do it. Guards already placed at the gate turn hostile and hunt,
+   * which is cheaper and reads better than spawning reinforcements from nowhere.
+   */
+  private raiseAlarm(): void {
+    if (!this.town || this.townAlarm > 0) return;
+    this.townAlarm = 60 * 45;
+    sfx.bars();
+    this.hintLines = ['the guard has seen you', 'amberwake does not forget quickly'];
+    this.hintFrames = 200;
+
+    for (const e of this.entities.all) {
+      if (!e.alive || e.kind !== 'folk') continue;
+      const r = this.town.residents[e.residentIndex];
+      if (!r || r.role !== 'guard') continue;
+      // Becomes a real enemy: hostile, hunting, and a genuine fight — ten hits
+      // from a rusted sword, exactly as specified.
+      e.kind = 'enemy';
+      e.variant = 'moblin';
+      e.contactDamage = 4;
+      e.hp = 10;
+      this.brains.register(e);
+    }
+  }
+
   private beginRevision(): void {
     // Instability rises with each Draft: powerful runs create stronger
     // contradictions, which is the in-fiction reason the world gets harder.
@@ -1212,6 +1372,15 @@ export class Scene {
       this.mode = this.mode === 'pack' ? 'playing' : 'pack';
       this.packCursor = 0;
       sfx.menuMove();
+      return;
+    }
+
+    // Talking. The world pauses; the town stays visible behind the box.
+    if (this.mode === 'talk') {
+      if (input.actionPressed || input.menuPressed) {
+        this.talkingTo = null;
+        this.mode = 'playing';
+      }
       return;
     }
 
@@ -1343,6 +1512,14 @@ export class Scene {
         this.loadout.cycle();
         sfx.menuMove();
       }
+      // Someone in reach takes priority over anything liftable. X already means
+      // "deal with what is in front of you"; a player standing face to face with
+      // Mara Venn and picking up a crate instead would rightly call that broken.
+      this.nearFolk = this.inTown ? (this.folkInReach()?.resident ?? null) : null;
+      if (input.actionPressed && this.nearFolk) {
+        this.beginTalk(this.nearFolk);
+        return;
+      }
       if (input.actionPressed) this.handleAction();
       if (input.itemPressed) this.useItem();
       this.updateCarried();
@@ -1358,6 +1535,21 @@ export class Scene {
 
       this.spawnAmbient();
       this.updateTutor(input);
+
+      // Step onto the road marker to travel to the town.
+      if (this.townGate?.alive && this.teleportCooldown <= 0) {
+        const d = Math.hypot(this.townGate.x - this.player.x, this.townGate.y - this.player.y);
+        if (d < 12) {
+          this.enterTown();
+          return;
+        }
+      }
+
+      if (this.inTown) {
+        if (this.townAlarm > 0) this.townAlarm--;
+        // Walking back out of the south gate returns to the meadow.
+        if (this.player.y > this.town!.gate.y - 8) this.leaveTown();
+      }
 
       this.checkTeleporters();
       this.tryBarRoom();
@@ -1634,7 +1826,7 @@ export class Scene {
 
     for (const circle of sword.hitCircles(px, py, this.player.facing)) {
       for (const e of this.entities.overlapCircle(circle.x, circle.y, circle.r, this.hitScratch)) {
-        if (e.kind !== 'prop' && e.kind !== 'enemy') continue;
+        if (e.kind !== 'prop' && e.kind !== 'enemy' && e.kind !== 'folk') continue;
         // Armored things shrug off a blade — unless the blade is an axe, which
         // is the whole reason to carry one. The "wrong tool" lesson bombs teach
         // becomes a reason to keep a second weapon in the pack.
@@ -1656,7 +1848,10 @@ export class Scene {
           * (sword.isSpin ? 2 : 1)
           * (this.brains.isOpen(e) ? 2 : 1);
         const landed = this.entities.hit(e, sword.swingId, damage, e.x - px, e.y - (py - 9));
-        if (landed) this.onHit(e, sword.isSpin);
+        if (landed) {
+          if (e.kind === 'folk') this.raiseAlarm();
+          this.onHit(e, sword.isSpin);
+        }
       }
     }
   }
@@ -2017,6 +2212,10 @@ export class Scene {
       batch.draw(d.key, d.x, d.y, { alpha: d.alpha ?? 1, flash: d.flash ?? 0 });
     }
 
+    if (this.townGate?.alive) {
+      drawTextCentred(batch, this.townGate.x, this.townGate.y + 4, 'to amberwake', 0.9);
+    }
+
     // Teleporter labels, in world space so they sit under their pad. Hidden
     // while the menu is up — two layers of text in one place reads as neither.
     for (const id of this.mode === 'menu' ? [] : this.teleporterIds) {
@@ -2048,7 +2247,17 @@ export class Scene {
     // UI pass: flat. Text and hearts have no surface for a torch to rake across.
     batch.setNormalMix(0);
     batch.begin(0, 0, viewport.w, viewport.h);
-    if (this.mode === 'offer' && this.offer) {
+    if (this.mode === 'talk' && this.talkingTo) {
+      const r = this.talkingTo;
+      drawTalk(batch, {
+        name: r.name,
+        role: r.role,
+        line: this.talkLine,
+        met: this.save.met?.[r.id] ?? 0,
+        truth: r.anchor ? r.truth : null,
+        shop: r.shop,
+      });
+    } else if (this.mode === 'offer' && this.offer) {
       drawOffer(batch, this.offer, this.pack.currentFor(this.offer), this.offerYes);
     } else if (this.mode === 'pack') {
       drawPack(batch, {
@@ -2113,6 +2322,13 @@ export class Scene {
         }
       }
 
+      // Who you are standing next to. Names on the ground are what turn a crowd
+      // into people you might recognise next life.
+      if (this.nearFolk && this.mode === 'playing') {
+        drawTextCentred(batch, viewport.w / 2, viewport.h - 62,
+          `x  speak to ${this.nearFolk.name.toLowerCase()}`, 0.85);
+      }
+
       // Teaching sits above the waking words and below the action, and never
       // covers the player: it fades in, fades out, and blocks nothing.
       const lesson = this.tutor.current();
@@ -2170,6 +2386,21 @@ function castsShade(world: World, tx: number, ty: number): boolean {
   if (tx < 0 || ty < 0 || tx >= world.tilesW || ty >= world.tilesH) return false;
   const kind = world.at(tx, ty);
   return kind === TileKind.Tree || kind === TileKind.Cliff || kind === TileKind.Wall;
+}
+
+/**
+ * Which silhouette a role wears.
+ *
+ * Five bodies covering thirteen roles: the shape only has to say what someone is
+ * doing at a glance across a square. Their name and their actual role are on
+ * screen the moment you speak to them.
+ */
+function folkSpriteFor(role: string): string {
+  if (role === 'guard' || role === 'soldier') return 'folk.guard.0';
+  if (role === 'merchant' || role === 'innkeeper') return 'folk.trader.0';
+  if (role === 'noble' || role === 'priest') return 'folk.gentry.0';
+  if (role === 'beggar' || role === 'drunk' || role === 'scavenger') return 'folk.poor.0';
+  return 'folk.worker.0';
 }
 
 /** Contact shadow sized to the caster's footprint. */

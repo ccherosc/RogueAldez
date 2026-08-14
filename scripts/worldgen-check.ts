@@ -21,6 +21,25 @@ import { BIOMES, biomesForAct, classify } from '../src/worldgen/biomes.ts';
 import { ClimateMap } from '../src/worldgen/fields.ts';
 import { GAZETTEER } from '../src/worldgen/gazetteer.ts';
 import { placeWorld } from '../src/worldgen/placement.ts';
+import { generateTown } from '../src/gen/town.ts';
+import { TOWNSFOLK, TOWN_CONDITIONS, CONDITION_PROFILES } from '../src/worldgen/townsfolk.ts';
+import type { Essence, Role } from '../src/worldgen/townsfolk.ts';
+
+/**
+ * Mirror of the essence->role table in townsfolk.ts.
+ *
+ * Deliberately duplicated rather than exported: a check that imports the very
+ * table it is validating proves only that the table equals itself. Written out
+ * here, a careless edit to either side shows up as a failure.
+ */
+const ESSENCE_OK: Record<Essence, Role[]> = {
+  curious: ['child', 'priest', 'merchant', 'scavenger', 'healer', 'beggar'],
+  makes: ['smith', 'farmer', 'scavenger', 'beggar', 'innkeeper'],
+  keeps: ['guard', 'soldier', 'innkeeper', 'noble', 'priest', 'healer'],
+  trades: ['merchant', 'innkeeper', 'noble', 'scavenger', 'beggar'],
+  believes: ['priest', 'healer', 'noble', 'soldier', 'beggar'],
+  endures: ['farmer', 'drunk', 'beggar', 'scavenger', 'guard', 'soldier'],
+};
 import {
   MAX_TIER, WEAPON_TYPES, makeWeapon, weaponStats, armourReduction, dropTier,
 } from '../src/chronicle/gear.ts';
@@ -318,6 +337,69 @@ check('same world seed yields an identical climate map', sameClimate);
   const moved = a.sites.filter((s, i) => s.rx !== c.sites[i]!.rx || s.ry !== c.sites[i]!.ry).length;
   check('a new draft scrambles the world', moved > GAZETTEER.length * 0.7,
     `${moved}/${GAZETTEER.length} sites moved`);
+}
+
+// ---------------------------------------------------------------------------
+// Amberwake, in every year it can have
+// ---------------------------------------------------------------------------
+// The claim under test is the one the whole town exists to make: same place,
+// same people, different roles — and it looks right every time.
+{
+  const roleMoves = new Map<string, Set<string>>();
+  let emptyTowns = 0;
+  let essenceViolations = 0;
+  let missingWell = 0;
+  let unwalkableSpawn = 0;
+  let strandedFolk = 0;
+
+  for (const condition of TOWN_CONDITIONS) {
+    for (let i = 0; i < 40; i++) {
+      const town = generateTown(condition, makeRng(0x70 + i * 31));
+
+      // A town with nobody in it is a bug, not a mood: even the abandoned and
+      // burned years keep holdouts, or there is nothing to walk into.
+      if (town.residents.length === 0) emptyTowns++;
+
+      // The load-bearing rule. Orra works metal in every life; if the shuffle
+      // ever hands her a noble's role, the recognition the town exists for is
+      // gone and nobody would be able to say why it felt wrong.
+      for (const r of town.residents) {
+        if (r.id.startsWith('guard-')) continue;
+        const person = TOWNSFOLK.find((t) => t.id === r.id)!;
+        if (!ESSENCE_OK[person.essence].includes(r.role)) essenceViolations++;
+        if (!roleMoves.has(r.id)) roleMoves.set(r.id, new Set());
+        roleMoves.get(r.id)!.add(r.role);
+
+        // Nobody may be generated inside a wall — a townsperson you cannot reach
+        // is a conversation the player never has.
+        const tx = Math.floor(r.x / 16);
+        const ty = Math.floor(r.y / 16);
+        if (!town.world.isWalkable(tx, ty)) strandedFolk++;
+      }
+
+      // The well is the fixed point: recognising it is how a player knows this
+      // is Amberwake before they know what year it is.
+      const wellHere = town.world.props.some((p) => p.key === 'prop.stalagmite');
+      if (!wellHere) missingWell++;
+
+      const sx = Math.floor(town.spawn.x / 16);
+      const sy = Math.floor(town.spawn.y / 16);
+      if (!town.world.isWalkable(sx, sy)) unwalkableSpawn++;
+    }
+  }
+
+  check('every condition produces an inhabited town', emptyTowns === 0, `${emptyTowns} empty`);
+  check('nobody is ever placed inside a wall', strandedFolk === 0, `${strandedFolk} stranded`);
+  check('the player always arrives on walkable ground', unwalkableSpawn === 0);
+  check('the well stands in every year', missingWell === 0);
+  check('no role ever contradicts an essence', essenceViolations === 0,
+    `${essenceViolations} violations`);
+
+  // And the payoff: people must actually move between roles across Drafts, or
+  // the town is merely six fixed casts wearing one name.
+  const movers = [...roleMoves.values()].filter((roles) => roles.size >= 3).length;
+  check('the same people hold different roles across Drafts', movers >= 6,
+    `${movers}/${roleMoves.size} people seen in 3+ roles`);
 }
 
 // ---------------------------------------------------------------------------
