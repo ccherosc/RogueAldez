@@ -10,18 +10,22 @@
  */
 
 import { viewport } from '../core/const.ts';
+import { DIFFICULTY_MODES, MODE_SCALES } from '../chronicle/difficulty.ts';
+import type { DifficultyMode } from '../chronicle/difficulty.ts';
 import { BIOMES } from '../worldgen/biomes.ts';
 import type { SpriteBatch } from '../render/batcher.ts';
 import { drawText, drawTextCentred } from './text.ts';
 
-export type MenuScreen = 'root' | 'teleport' | 'boss' | 'controls';
+export type MenuScreen = 'root' | 'teleport' | 'boss' | 'controls' | 'difficulty';
 
 export interface MenuState {
+  /** current difficulty, so the menu can show what is already chosen */
+  difficulty?: DifficultyMode;
   screen: MenuScreen;
   cursor: number;
 }
 
-export const ROOT_ITEMS = ['start', 'controls', 'teleport', 'boss fights'] as const;
+export const ROOT_ITEMS = ['start', 'difficulty', 'controls', 'teleport', 'boss fights'] as const;
 
 /** What the controls screen is told about the pad, so ui/ never polls hardware. */
 export interface PadStatus {
@@ -58,6 +62,7 @@ export function menuLength(state: MenuState): number {
     case 'teleport': return BIOMES.length;
     case 'boss': return BOSS_ITEMS.length;
     case 'controls': return 1;
+    case 'difficulty': return DIFFICULTY_MODES.length;
   }
 }
 
@@ -165,9 +170,22 @@ export function drawMenu(
   switch (state.screen) {
     case 'root':
       drawRow(0, 'start', 'wake in the vale');
-      drawRow(1, 'controls', 'keys, pad, and a live pad test');
-      drawRow(2, 'teleport', 'visit any region');
-      drawRow(3, 'boss fights', 'face the big ones');
+      // The current mode is shown on the root row, not buried one screen down.
+      // A difficulty the player cannot see is one they will forget they set.
+      drawRow(1, 'difficulty', state.difficulty ?? 'hard');
+      drawRow(2, 'controls', 'keys, pad, and a live pad test');
+      drawRow(3, 'teleport', 'visit any region');
+      drawRow(4, 'boss fights', 'face the big ones');
+      break;
+
+    case 'difficulty':
+      DIFFICULTY_MODES.forEach((id, i) => {
+        const m = MODE_SCALES[id];
+        // Mark the active one. Without it the list reads as four buttons rather
+        // than as a setting that already has a value.
+        const current = id === (state.difficulty ?? 'hard');
+        drawRow(i, current ? `${m.label}  *` : m.label, m.blurb);
+      });
       break;
 
 

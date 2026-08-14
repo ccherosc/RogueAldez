@@ -44,7 +44,10 @@ import type { RelicEffects, RelicId } from '../chronicle/relics.ts';
 import { drawReliquary } from '../ui/reliquary.ts';
 import { sfx } from '../audio/sfx.ts';
 import { music } from '../audio/music.ts';
-import { tierFor, difficultyFor } from '../chronicle/difficulty.ts';
+import {
+  tierFor, difficultyFor, damageScale, DEFAULT_MODE, DIFFICULTY_MODES,
+} from '../chronicle/difficulty.ts';
+import type { DifficultyMode } from '../chronicle/difficulty.ts';
 import { generateFloor, gateBarTiles } from '../gen/floor.ts';
 import type { GeneratedFloor } from '../gen/floor.ts';
 import { loadSave, writeSave, emptySave } from './save.ts';
@@ -216,6 +219,9 @@ export class Scene {
   private shopSide: 'buy' | 'sell' = 'buy';
   private shopCursor = 0;
   private levelBanner = 0;
+  /** A one-line confirmation that a setting took, and what it changed. */
+  private notice = '';
+  private noticeFrames = 0;
   private inTown = false;
   /** the road marker in the meadow that leads to Amberwake */
   private townGate: Entity | null = null;
@@ -382,7 +388,7 @@ export class Scene {
       this.biome = classify(climate.elevation, climate.moisture, climate.temperature, pool);
     }
 
-    this.floor = generateFloor(draft, this.act, this.biome, floorRng, depth);
+    this.floor = generateFloor(draft, this.act, this.biome, floorRng, depth, this.difficulty);
     music.setMood(this.biome.mode, this.biome.root);
     this.world = this.floor.world;
     this.entities = new EntityStore(this.world.tilesW);
@@ -411,7 +417,10 @@ export class Scene {
 
     // The ramp: the same Octorok that dies in two hits on floor two takes four
     // in the Belliron Peaks. Keese stay fragile — a tanky bat is just tedious.
-    const diff = difficultyFor(tierFor(this.act.pressure, depth));
+    const diff = difficultyFor(tierFor(this.act.pressure, depth), this.difficulty);
+    // Pacing is a property of the floor, so it is set once here rather than
+    // re-derived per enemy.
+    this.brains.setPacing(diff.speed, diff.telegraph);
     for (const spawn of this.floor.enemies) {
       const e = this.entities.spawn(Brains.spawnInit(spawn.variant, spawn.x, spawn.y));
       // The cap is the promise: nothing but a boss takes more than two hits
@@ -906,12 +915,32 @@ export class Scene {
           this.mode = 'playing';
           this.showRebirthHint();
         } else {
-          this.menu.screen =
-            this.menu.cursor === 1 ? 'controls' : this.menu.cursor === 2 ? 'teleport' : 'boss';
-          this.menu.cursor = 0;
+          const screens = ['difficulty', 'controls', 'teleport', 'boss'] as const;
+          this.menu.screen = screens[this.menu.cursor - 1] ?? 'controls';
+          // Open the difficulty list on whatever is already chosen, so the
+          // current setting is where the cursor starts rather than something the
+          // player has to go find.
+          this.menu.cursor = this.menu.screen === 'difficulty'
+            ? Math.max(0, DIFFICULTY_MODES.indexOf(this.difficulty))
+            : 0;
         }
         sfx.pickup();
         break;
+
+      case 'difficulty': {
+        const pick = DIFFICULTY_MODES[this.menu.cursor];
+        if (pick) {
+          this.setDifficulty(pick);
+          // Say plainly what took effect now and what waits for the next floor.
+          // The alternative is a player who changes the setting, sees the same
+          // room, and concludes it is broken.
+          this.notice = `${pick} - fully from the next floor`;
+          this.noticeFrames = 170;
+        }
+        this.menu.screen = 'root';
+        this.menu.cursor = 1;
+        break;
+      }
 
       case 'controls':
         break; // read-only; X goes back
@@ -1193,7 +1222,25 @@ export class Scene {
    * hit is the difference between a long fight and no fight at all.
    */
   private afterArmour(damage: number): number {
-    return Math.max(1, damage - this.pack.damageReduction);
+    // Mode last, and still floored at one. On casual a hit has to remain a hit:
+    // the point is to survive mistakes, not to stop noticing them.
+    const scaled = (damage - this.pack.damageReduction) * damageScale(this.difficulty);
+    return Math.max(1, Math.round(scaled));
+  }
+
+  /** The chosen difficulty. Absent in an older save, which means it was hard. */
+  get difficulty(): DifficultyMode {
+    return this.save.mode ?? DEFAULT_MODE;
+  }
+
+  setDifficulty(mode: DifficultyMode): void {
+    this.save.mode = mode;
+    this.persist();
+    // Pacing applies immediately; enemy counts and caps are baked into the floor
+    // and take effect on the next one. Saying so in the banner is better than
+    // letting the player conclude the setting did nothing.
+    const diff = difficultyFor(tierFor(this.act.pressure, this.depth), mode);
+    this.brains.setPacing(diff.speed, diff.telegraph);
   }
 
   /**
@@ -1684,6 +1731,7 @@ export class Scene {
       if (this.hintFrames > 0) this.hintFrames--;
       if (this.pickupBanner > 0) this.pickupBanner--;
       if (this.levelBanner > 0) this.levelBanner--;
+      if (this.noticeFrames > 0) this.noticeFrames--;
       music.setIntensity(this.musicIntensity());
 
       if (this.player.dead) {
@@ -2407,6 +2455,7 @@ export class Scene {
         amber: this.amber,
       }, this.tick);
     } else if (this.mode === 'menu') {
+      this.menu.difficulty = this.difficulty;
       drawMenu(batch, this.menu, this.tick, this.padStatus);
     } else if (this.mode === 'reliquary') {
       drawReliquary(batch, {
@@ -2452,6 +2501,11 @@ export class Scene {
       if (this.levelBanner > 0) {
         const a = Math.min(1, this.levelBanner / 30) * 0.95;
         drawTextCentred(batch, viewport.w / 2, 50, `level ${this.level}`, a);
+      }
+
+      if (this.noticeFrames > 0) {
+        const a = Math.min(1, this.noticeFrames / 30) * 0.9;
+        drawTextCentred(batch, viewport.w / 2, 60, this.notice, a);
       }
 
       // What you just picked up, and whether it went straight on. Loot the

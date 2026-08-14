@@ -11,11 +11,22 @@
  * here yet a player would mourn.
  */
 
+import { DEFAULT_MODE } from '../chronicle/difficulty.ts';
+import type { DifficultyMode } from '../chronicle/difficulty.ts';
+
 const STORAGE_KEY = 'rogue-aldez:save';
+// Not bumped for `mode`. The field is optional and absent means DEFAULT_MODE, so
+// an existing save reads correctly — and nobody should lose their amber and
+// their Acts over a difficulty setting that did not exist when they saved.
 const SCHEMA_VERSION = 2;
 
 export interface SaveData {
   version: number;
+  /**
+   * Chosen difficulty. Deliberately outside the Draft: a mode is a statement
+   * about the player, not about this life, so dying must not reset it.
+   */
+  mode?: DifficultyMode;
   /** star amber carried across every Draft */
   amber: number;
   /** how many Drafts Aldez has been through */
@@ -56,6 +67,7 @@ export function emptySave(worldSeed: number): SaveData {
     worldSeed,
     actIndex: 0,
     relics: [],
+    mode: DEFAULT_MODE,
   taught: [],
   met: {},
   };

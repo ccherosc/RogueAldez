@@ -17,7 +17,8 @@ import { TILE } from '../art/tiles.ts';
 import { World, TileKind } from '../world/tilemap.ts';
 import type { Draft } from '../chronicle/draft.ts';
 import type { Act } from '../chronicle/acts.ts';
-import { tierFor, difficultyFor } from '../chronicle/difficulty.ts';
+import { tierFor, difficultyFor, DEFAULT_MODE } from '../chronicle/difficulty.ts';
+import type { DifficultyMode } from '../chronicle/difficulty.ts';
 import type { Biome } from '../worldgen/biomes.ts';
 import { unionTags } from '../worldgen/tags.ts';
 import type { Tag } from '../worldgen/tags.ts';
@@ -485,6 +486,7 @@ export function generateFloor(
   biome: Biome,
   rng: Rng,
   depth = 0,
+  mode: DifficultyMode = DEFAULT_MODE,
 ): GeneratedFloor {
   // Open country sprawls; dungeons stay tight. 5x4 rooms of overworld is what
   // makes a biome feel like a region you cross rather than a screen you clear —
@@ -608,7 +610,7 @@ export function generateFloor(
     if (room.kind === 'entrance') continue; // never ambush the player on arrival
     populate(
       world, room, act, tags, draft, depth, reserved,
-      rng.stream(`pop:${draft.seed}:${room.rx}:${room.ry}`), enemies,
+      rng.stream(`pop:${draft.seed}:${room.rx}:${room.ry}`), enemies, mode,
     );
   }
 
@@ -1303,11 +1305,12 @@ function populate(
   reserved: ReadonlySet<string>,
   rng: Rng,
   out: EnemySpawn[],
+  mode: DifficultyMode,
 ): void {
   if (room.kind === 'rest') return;
 
   const tier = tierFor(act.pressure, depth);
-  const diff = difficultyFor(tier);
+  const diff = difficultyFor(tier, mode);
 
   // The waking meadow is no longer empty. It was a sanctuary on the theory that
   // arriving to nothing is peaceful; in practice a player holding a sword with

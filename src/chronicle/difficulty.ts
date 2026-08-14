@@ -15,6 +15,75 @@
  * function of it, so the whole curve can be read — and tested — as a table.
  */
 
+/**
+ * The four modes, and what a mode is allowed to be.
+ *
+ * A mode is a set of multipliers on the curve, not a second curve. The shape of
+ * the ramp — gentle meadow, readable first dungeon, pressure that arrives with
+ * depth — is a design decision, and it should survive the player picking an
+ * easier game. Casual is the same game with the volume down, not a different
+ * one.
+ *
+ * Two traps live in this table, both of which come from assuming "harder means
+ * every number goes up":
+ *
+ *  - `telegraph` is *inverted*. It multiplies wind-up frames, so a longer
+ *    telegraph is an easier fight. Insano shortens it; casual stretches it.
+ *  - `hp` scales a **cap**, not a value. It floors at 1 elsewhere, because a cap
+ *    that rounds to zero does not make enemies weak, it makes them spawn dead.
+ *
+ * `damage` is on the player's side of the ledger: what a hit costs Aldez. It is
+ * the one number that separates "I have time to learn this" from "I do not",
+ * and it moves further across the range than anything else here.
+ */
+export const DIFFICULTY_MODES = ['casual', 'easy', 'hard', 'insano'] as const;
+export type DifficultyMode = (typeof DIFFICULTY_MODES)[number];
+
+export const DEFAULT_MODE: DifficultyMode = 'hard';
+
+export interface ModeScale {
+  /** shown in the menu */
+  label: string;
+  /** one line under it, in the player's terms rather than the designer's */
+  blurb: string;
+  hp: number;
+  count: number;
+  speed: number;
+  /** multiplies wind-up frames: higher is *easier* */
+  telegraph: number;
+  big: number;
+  /** multiplies damage taken by the player */
+  damage: number;
+}
+
+export const MODE_SCALES: Record<DifficultyMode, ModeScale> = {
+  casual: {
+    label: 'casual',
+    blurb: 'for seeing the world. hits barely sting',
+    hp: 0.5, count: 0.6, speed: 0.8, telegraph: 1.4, big: 0.3, damage: 0.5,
+  },
+  easy: {
+    label: 'easy',
+    blurb: 'forgiving, but it can still kill you',
+    hp: 0.75, count: 0.8, speed: 0.9, telegraph: 1.2, big: 0.65, damage: 0.75,
+  },
+  hard: {
+    label: 'hard',
+    blurb: 'the game as it was tuned',
+    hp: 1, count: 1, speed: 1, telegraph: 1, big: 1, damage: 1,
+  },
+  insano: {
+    label: 'insano',
+    blurb: 'they hit twice as hard and they do not wait',
+    hp: 1.5, count: 1.35, speed: 1.15, telegraph: 0.7, big: 1.6, damage: 2,
+  },
+};
+
+/** What a hit costs Aldez under this mode. Applied after armour, never below 1. */
+export function damageScale(mode: DifficultyMode): number {
+  return MODE_SCALES[mode].damage;
+}
+
 export interface Difficulty {
   /** hard cap on any non-boss enemy's health */
   maxHp: number;
@@ -36,7 +105,7 @@ export function tierFor(actPressure: number, depth: number): number {
   return actPressure * 2 + depth;
 }
 
-export function difficultyFor(tier: number): Difficulty {
+export function difficultyFor(tier: number, mode: DifficultyMode = DEFAULT_MODE): Difficulty {
   // Hand-authored for the first few tiers, then extrapolated. The early rows are
   // the ones a player actually judges the game by, and they are too important to
   // leave to a formula.
@@ -50,14 +119,35 @@ export function difficultyFor(tier: number): Difficulty {
     { maxHp: 3, count: 4, speed: 1.0, telegraph: 1.0, bigChance: 0.14 },
     { maxHp: 4, count: 4, speed: 1.0, telegraph: 1.0, bigChance: 0.2 },
   ];
-  if (tier < table.length) return table[tier]!;
+  const base = tier < table.length ? table[tier]! : (() => {
+    const over = tier - table.length + 1;
+    return {
+      maxHp: 4 + Math.floor(over / 2),
+      count: Math.min(7, 4 + Math.floor(over / 2)),
+      speed: 1.0,
+      telegraph: 1.0,
+      bigChance: Math.min(0.4, 0.2 + over * 0.04),
+    };
+  })();
 
-  const over = tier - table.length + 1;
+  return scaleBy(base, MODE_SCALES[mode]);
+}
+
+/**
+ * Apply a mode to a curve row.
+ *
+ * Both counts floor at 1: a mode that scales a room down to zero enemies has
+ * stopped being an easier game and started being an empty one, and a maxHp cap
+ * of zero would make every enemy spawn already dead.
+ */
+function scaleBy(base: Difficulty, m: ModeScale): Difficulty {
   return {
-    maxHp: 4 + Math.floor(over / 2),
-    count: Math.min(7, 4 + Math.floor(over / 2)),
-    speed: 1.0,
-    telegraph: 1.0,
-    bigChance: Math.min(0.4, 0.2 + over * 0.04),
+    maxHp: Math.max(1, Math.round(base.maxHp * m.hp)),
+    count: Math.max(1, Math.round(base.count * m.count)),
+    speed: base.speed * m.speed,
+    telegraph: base.telegraph * m.telegraph,
+    // A mode must not invent big Errata where the curve says there are none:
+    // multiplying zero keeps tier 0 and 1 clean even on insano.
+    bigChance: Math.min(1, base.bigChance * m.big),
   };
 }

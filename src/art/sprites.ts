@@ -1434,6 +1434,11 @@ export const FONT_GLYPHS: Record<string, string> = {
   '8': '111101111101111', '9': '111101111001111',
   ' ': '000000000000000', '.': '000000000000010', ',': '000000000010100', '-': '000000111000000',
   "'": '010010000000000', ':': '000010000010000', '!': '010010010000010', '?': '111001010000010',
+  // The menu cursor and the "this one is current" marker. Both were being drawn
+  // long before either existed here, and `drawText` substitutes '?' for anything
+  // it does not have — so every menu in the game has been showing a question
+  // mark where its selection arrow should be.
+  '>': '100010001010100', '<': '001010100010001', '*': '000101010101000',
 };
 
 /** Every glyph the runtime font atlas carries, in a stable order. */

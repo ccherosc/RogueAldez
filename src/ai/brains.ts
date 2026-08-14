@@ -90,9 +90,43 @@ export interface PlayerView {
 export class Brains {
   private brains = new Map<number, Brain>();
   private rng: Rng;
+  /**
+   * Pacing, set by the floor from the difficulty curve.
+   *
+   * These two numbers were declared on `Difficulty` from the start and read by
+   * nothing: the curve has been promising slower, more readable enemies on the
+   * early tiers and never delivering them. They live here rather than on the
+   * entity because pacing is a property of the *fight the floor wants*, not of
+   * the Erratum — the same Moblin is deliberate in the meadow and vicious in
+   * the Peaks.
+   */
+  private speedScale = 1;
+  private telegraphScale = 1;
 
   constructor(rng: Rng) {
     this.rng = rng;
+  }
+
+  /** Apply the floor's pacing. Called once when a floor loads. */
+  setPacing(speed: number, telegraph: number): void {
+    this.speedScale = speed;
+    this.telegraphScale = telegraph;
+  }
+
+  /** A variant's walk speed under the current pacing. */
+  private spd(variant: string): number {
+    return ENEMY_STATS[variant]!.speed * this.speedScale;
+  }
+
+  /**
+   * A wind-up length under the current pacing, floored at four frames.
+   *
+   * Insano shortens telegraphs, and a telegraph short enough to be invisible is
+   * not a hard fight, it is an unfair one — the tell has to survive the mode
+   * that exists to compress it.
+   */
+  private tel(frames: number): number {
+    return Math.max(4, Math.round(frames * this.telegraphScale));
   }
 
   /** Build the spawn payload for an enemy type, so callers don't repeat stats. */
@@ -266,7 +300,7 @@ export class Brains {
     player: PlayerView,
     isSolid: SolidQuery,
   ): void {
-    const speed = ENEMY_STATS['octorok']!.speed;
+    const speed = this.spd('octorok');
     const dx = player.x - e.x;
     const dy = player.y - e.y;
 
@@ -322,7 +356,7 @@ export class Brains {
   }
 
   private moblin(e: Entity, brain: Brain, player: PlayerView, isSolid: SolidQuery): void {
-    const speed = ENEMY_STATS['moblin']!.speed;
+    const speed = this.spd('moblin');
     const dx = player.x - e.x;
     const dy = player.y - e.y;
     const dist = Math.hypot(dx, dy);
@@ -346,7 +380,7 @@ export class Brains {
     if (brain.state === 'telegraph') {
       // Stand still and face the player. The pause *is* the tell — a charge with
       // no windup is a cheap shot, not a challenge.
-      if (brain.timer >= MOBLIN_TELEGRAPH) {
+      if (brain.timer >= this.tel(MOBLIN_TELEGRAPH)) {
         brain.state = 'charge';
         brain.timer = 0;
         const len = dist || 1;
@@ -392,7 +426,7 @@ export class Brains {
     }
 
     if (brain.state === 'charge') {
-      const blocked = this.step(e, brain.dirX * stats.speed * 6, brain.dirY * stats.speed * 6, isSolid);
+      const blocked = this.step(e, brain.dirX * stats.speed * 6 * this.speedScale, brain.dirY * stats.speed * 6 * this.speedScale, isSolid);
       if (blocked || brain.timer >= 13) {
         brain.state = 'wander';
         brain.timer = 0;
@@ -408,7 +442,7 @@ export class Brains {
     }
     if (dist < 180) {
       const len = dist || 1;
-      this.step(e, (dx / len) * stats.speed, (dy / len) * stats.speed, isSolid);
+      this.step(e, (dx / len) * stats.speed * this.speedScale, (dy / len) * stats.speed * this.speedScale, isSolid);
       e.facing = dirNameFrom(dx, dy);
     }
   }
@@ -437,7 +471,7 @@ export class Brains {
 
     switch (brain.state) {
       case 'telegraph':
-        if (brain.timer >= WARDEN_TELEGRAPH) {
+        if (brain.timer >= this.tel(WARDEN_TELEGRAPH)) {
           brain.state = 'charge';
           brain.timer = 0;
           brain.dirX = dx / dist;
@@ -447,7 +481,8 @@ export class Brains {
 
       case 'charge': {
         const blocked = this.step(
-          e, brain.dirX * stats.speed * 7, brain.dirY * stats.speed * 7, isSolid,
+          e, brain.dirX * stats.speed * 7 * this.speedScale,
+          brain.dirY * stats.speed * 7 * this.speedScale, isSolid,
         );
         if (blocked || brain.timer >= WARDEN_CHARGE) {
           brain.state = 'flee'; // reused as the "open" beat
@@ -470,7 +505,7 @@ export class Brains {
           brain.timer = 0;
           return;
         }
-        this.step(e, (dx / dist) * stats.speed, (dy / dist) * stats.speed, isSolid);
+        this.step(e, (dx / dist) * stats.speed * this.speedScale, (dy / dist) * stats.speed * this.speedScale, isSolid);
         e.facing = dirNameFrom(dx, dy);
     }
   }
@@ -481,7 +516,7 @@ export class Brains {
   }
 
   private keese(e: Entity, brain: Brain, player: PlayerView, isSolid: SolidQuery): void {
-    const speed = ENEMY_STATS['keese']!.speed;
+    const speed = this.spd('keese');
     const dx = player.x - e.x;
     const dy = player.y - e.y;
     const len = Math.hypot(dx, dy) || 1;

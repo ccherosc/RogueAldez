@@ -21,6 +21,8 @@ import { BIOMES, biomesForAct, classify } from '../src/worldgen/biomes.ts';
 import { ClimateMap } from '../src/worldgen/fields.ts';
 import { GAZETTEER } from '../src/worldgen/gazetteer.ts';
 import { placeWorld } from '../src/worldgen/placement.ts';
+import { difficultyFor, MODE_SCALES } from '../src/chronicle/difficulty.ts';
+import type { DifficultyMode } from '../src/chronicle/difficulty.ts';
 import { generateTown } from '../src/gen/town.ts';
 import { TileKind } from '../src/world/tilemap.ts';
 import { TOWNSFOLK, TOWN_CONDITIONS, CONDITION_PROFILES } from '../src/worldgen/townsfolk.ts';
@@ -382,6 +384,76 @@ check('same world seed yields an identical climate map', sameClimate);
   }
   check('every roof is one material', speckled === 0 && roofsSeen > 0,
     `${roofsSeen} roofs, ${speckled} speckled`);
+}
+
+// ---------------------------------------------------------------------------
+// Difficulty modes
+// ---------------------------------------------------------------------------
+// A mode table reads plausibly whatever the numbers say, so the ordering has to
+// be proved rather than eyeballed. The subtle one is `telegraph`, which is
+// inverted — it multiplies wind-up frames, so *longer* is easier. Written as
+// "harder means bigger" it would sail through review and make insano the most
+// readable mode in the game.
+{
+  const ORDER: DifficultyMode[] = ['casual', 'easy', 'hard', 'insano'];
+  const TIERS = [0, 1, 2, 3, 5, 8, 14];
+
+  let hpOrdered = true;
+  let countOrdered = true;
+  let telegraphOrdered = true;
+  let speedOrdered = true;
+  let capsPositive = true;
+
+  for (const tier of TIERS) {
+    const rows = ORDER.map((m) => difficultyFor(tier, m));
+    for (let i = 1; i < rows.length; i++) {
+      const lo = rows[i - 1]!;
+      const hi = rows[i]!;
+      if (hi.maxHp < lo.maxHp) hpOrdered = false;
+      if (hi.count < lo.count) countOrdered = false;
+      // Harder must never give the player *more* warning.
+      if (hi.telegraph > lo.telegraph) telegraphOrdered = false;
+      if (hi.speed < lo.speed) speedOrdered = false;
+    }
+    // A cap of zero does not make enemies weak, it makes them spawn dead; a
+    // count of zero turns the easy modes into an empty museum.
+    for (const row of rows) {
+      if (row.maxHp < 1 || row.count < 1) capsPositive = false;
+    }
+  }
+
+  check('harder modes never reduce enemy health or numbers', hpOrdered && countOrdered);
+  check('harder modes never lengthen a telegraph', telegraphOrdered);
+  check('harder modes never slow an enemy down', speedOrdered);
+  check('no mode can produce a zero cap or an empty room', capsPositive);
+
+  // Damage taken must span a real range, and hard must be exactly the tuning the
+  // rest of the game was built against — a "hard" that quietly scales anything
+  // would mean every other number in the project was measured against a lie.
+  const hard = MODE_SCALES.hard;
+  check('hard is the untouched curve',
+    hard.hp === 1 && hard.count === 1 && hard.speed === 1
+    && hard.telegraph === 1 && hard.big === 1 && hard.damage === 1);
+  check('damage taken is strictly ordered across modes',
+    ORDER.every((m, i) => i === 0 || MODE_SCALES[m].damage > MODE_SCALES[ORDER[i - 1]!].damage),
+    ORDER.map((m) => `${m} x${MODE_SCALES[m].damage}`).join('  '));
+
+  // The meadow's promise outlives the mode: tier 0 stays a place to practise.
+  check('even insano leaves the waking meadow free of big Errata',
+    difficultyFor(0, 'insano').bigChance === 0 && difficultyFor(1, 'insano').bigChance === 0);
+
+  // And every mode still has to be beatable in the sense the floor checker means.
+  let modeFloors = 0;
+  for (const m of ORDER) {
+    for (let i = 0; i < 8; i++) {
+      const draft = rollDraft(1 + (i % 5), makeRng(0x4400 + i), i % 5);
+      const floor = generateFloor(draft, actAt(i % ACTS.length), BIOMES[i % BIOMES.length]!,
+        makeRng(draft.seed), i % 4, m);
+      if (floor.enemies.length > 0 || floor.rooms.size > 0) modeFloors++;
+    }
+  }
+  check('every mode generates real floors', modeFloors === ORDER.length * 8,
+    `${modeFloors} floors`);
 }
 
 // ---------------------------------------------------------------------------
