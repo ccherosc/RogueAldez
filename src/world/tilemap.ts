@@ -73,10 +73,33 @@ export class World {
    */
   readonly props: Prop[] = [];
 
+  /**
+   * Optional per-tile material choice, 0 = "decide from the position hash".
+   *
+   * Position hashing is right for terrain — it is what stops a field of grass
+   * repeating — but wrong for anything built, because a builder does not change
+   * tile supplier halfway across a roof. A generator that knows a structure is
+   * one object stamps its choice here, and the whole structure agrees.
+   */
+  private readonly materials: Uint8Array;
+
   constructor(roomsW: number, roomsH: number) {
     this.roomsW = roomsW;
     this.roomsH = roomsH;
     this.tiles = new Uint8Array(roomsW * ROOM_TILES_W * roomsH * ROOM_TILES_H);
+    this.materials = new Uint8Array(this.tiles.length);
+  }
+
+  /** Stamp a material on a tile. `variant` is 1-based; 0 restores the hash. */
+  setMaterial(tx: number, ty: number, variant: number): void {
+    if (tx < 0 || ty < 0 || tx >= this.tilesW || ty >= this.tilesH) return;
+    this.materials[ty * this.tilesW + tx] = variant;
+  }
+
+  /** 0 when nothing was stamped, meaning "fall back to the position hash". */
+  materialAt(tx: number, ty: number): number {
+    if (tx < 0 || ty < 0 || tx >= this.tilesW || ty >= this.tilesH) return 0;
+    return this.materials[ty * this.tilesW + tx]!;
   }
 
   get tilesW(): number { return this.roomsW * ROOM_TILES_W; }
@@ -229,8 +252,12 @@ export function tileKey(world: World, tx: number, ty: number, tick: number): str
       return `tree.base.${Math.floor(h * 4)}`;
     case TileKind.Cliff:
       return `cliff.base.${Math.floor(h * 4)}`;
-    case TileKind.Roof:
-      return `roof.base.${Math.floor(h * 3)}`;
+    case TileKind.Roof: {
+      // Built, not grown: the material is stamped per building so one house is
+      // one roof rather than a speckle of three.
+      const stamped = world.materialAt(tx, ty);
+      return `roof.base.${stamped > 0 ? stamped - 1 : Math.floor(h * 3)}`;
+    }
     case TileKind.Cobble:
       return `cobble.base.${Math.floor(h * 3)}`;
   }

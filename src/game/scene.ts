@@ -61,6 +61,7 @@ import { drawTalk } from '../ui/talk.ts';
 import { drawShop } from '../ui/shop.ts';
 import {
   levelForXp, levelProgress, xpForKill, bonusHearts, merchantTierFor, priceOf, sellValue,
+  xpForLevel,
 } from '../chronicle/level.ts';
 import { generateTown, TOWN_COLS, TOWN_ROWS } from '../gen/town.ts';
 import type { TownResident } from '../gen/town.ts';
@@ -461,6 +462,12 @@ export class Scene {
     // saves — and nothing is lost, because Esc -> Teleport reaches every biome
     // from anywhere, which is strictly better for testing anyway.
     if (this.fixture) this.applyFixture(this.fixture);
+    // A town fixture bypasses the gate entirely: walking there would make the
+    // check depend on pathfinding across the meadow, which is not what it tests.
+    if (this.fixture?.town && !this.inTown) {
+      if (this.fixture.level !== undefined) this.xp = xpForLevel(this.fixture.level);
+      this.enterTown(this.fixture.town);
+    }
     // The road to Amberwake. Depth 0 only: the meadow is the one place with a
     // way out that is not downward, which is what makes the town feel like a
     // destination rather than another floor.
@@ -1219,9 +1226,9 @@ export class Scene {
    * this life rather than about this visit — leave and come back and it is the
    * same year, which is what makes it a place instead of a slot machine.
    */
-  enterTown(): void {
+  enterTown(force?: TownCondition): void {
     const rng = this.rng.stream(`town:${this.draft.seed}`);
-    const condition = rng.pick(TOWN_CONDITIONS);
+    const condition = force ?? rng.pick(TOWN_CONDITIONS);
     const built = generateTown(condition, this.rng.stream(`town-build:${this.draft.seed}`));
 
     this.world = built.world;

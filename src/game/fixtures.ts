@@ -15,6 +15,8 @@
  * explicit URL parameter and nothing in normal play consults them.
  */
 
+import type { TownCondition } from '../worldgen/townsfolk.ts';
+
 export interface FixtureSpawn {
   variant: string;
   /** offset from the player's spawn, in pixels */
@@ -50,9 +52,47 @@ export interface Fixture {
   health?: number;
   amber?: number;
   relics?: string[];
+  /**
+   * Enter Amberwake immediately, in this exact year.
+   *
+   * A town is the one scenario the enemy/prop lists cannot express, because what
+   * is being pinned is a whole generated settlement rather than a few things
+   * placed near the spawn. Pinning the condition is the point: "flourishing" and
+   * "burned" are different enough that a check written against one proves
+   * nothing about the other.
+   */
+  town?: TownCondition;
+  /** starting level, for anything that reads off merchant standing */
+  level?: number;
 }
 
 export const FIXTURES: Record<string, Fixture> = {
+  /** Amberwake in its good years: houses standing, street busy, merchants trading. */
+  town: {
+    id: 'town',
+    description: 'Amberwake flourishing, the player on the market street',
+    seed: 0x7a3b1,
+    act: 0,
+    biomeId: 'meadow',
+    depth: 0,
+    town: 'flourishing',
+    level: 17,
+    amber: 600,
+  },
+
+  /** The same town, the same people, after it burned. Proves the year changes it. */
+  townBurned: {
+    id: 'townBurned',
+    description: 'Amberwake burned, the same cast in worse roles',
+    seed: 0x7a3b1,
+    act: 0,
+    biomeId: 'meadow',
+    depth: 0,
+    town: 'burned',
+    level: 17,
+    amber: 600,
+  },
+
   /** One enemy at arm's length. Sword phases, hitstop, flash, knockback. */
   combat: {
     id: 'combat',

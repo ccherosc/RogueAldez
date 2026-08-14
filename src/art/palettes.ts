@@ -210,6 +210,10 @@ export const PAL_PROP = buildPalette('prop', {
   wood: ramp(5, { L: 0.32, C: 0.055, H: 56 }, { L: 0.62, C: 0.085, H: 70 }),
   stone: ramp(5, { L: 0.28, C: 0.018, H: 268 }, { L: 0.66, C: 0.030, H: 252 }),
   flame: ramp(5, { L: 0.58, C: 0.175, H: 38 }, { L: 0.94, C: 0.115, H: 92 }),
+  // Straw, for the third roof. `pot` was tried here first and read as a swimming
+  // pool: it is a blue ceramic glaze, and nothing that saturated has ever kept
+  // rain off a house.
+  thatch: ramp(5, { L: 0.36, C: 0.045, H: 82 }, { L: 0.70, C: 0.075, H: 96 }),
 });
 
 export const ALL_PALETTES: readonly Palette[] = [

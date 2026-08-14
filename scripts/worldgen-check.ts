@@ -22,6 +22,7 @@ import { ClimateMap } from '../src/worldgen/fields.ts';
 import { GAZETTEER } from '../src/worldgen/gazetteer.ts';
 import { placeWorld } from '../src/worldgen/placement.ts';
 import { generateTown } from '../src/gen/town.ts';
+import { TileKind } from '../src/world/tilemap.ts';
 import { TOWNSFOLK, TOWN_CONDITIONS, CONDITION_PROFILES } from '../src/worldgen/townsfolk.ts';
 import type { Essence, Role } from '../src/worldgen/townsfolk.ts';
 
@@ -43,6 +44,10 @@ const ESSENCE_OK: Record<Essence, Role[]> = {
 import {
   MAX_TIER, WEAPON_TYPES, makeWeapon, weaponStats, armourReduction, dropTier,
 } from '../src/chronicle/gear.ts';
+import {
+  MAX_LEVEL, xpForLevel, levelForXp, levelProgress, bonusHearts,
+  merchantTierFor, priceOf, sellValue,
+} from '../src/chronicle/level.ts';
 import { generateRegion, ringThreat } from '../src/gen/floor.ts';
 import { ENEMY_STATS } from '../src/ai/brains.ts';
 import { ACTS, actAt } from '../src/chronicle/acts.ts';
@@ -337,6 +342,110 @@ check('same world seed yields an identical climate map', sameClimate);
   const moved = a.sites.filter((s, i) => s.rx !== c.sites[i]!.rx || s.ry !== c.sites[i]!.ry).length;
   check('a new draft scrambles the world', moved > GAZETTEER.length * 0.7,
     `${moved}/${GAZETTEER.length} sites moved`);
+}
+
+// A building is one object, so it gets one roof. Left to the position hash each
+// tile picked its own material and a single house came out speckled with all
+// three, which reads as a rendering fault rather than as architecture.
+{
+  let speckled = 0;
+  let roofsSeen = 0;
+  for (let i = 0; i < 60; i++) {
+    const condition = TOWN_CONDITIONS[i % TOWN_CONDITIONS.length]!;
+    const { world } = generateTown(condition, makeRng(0x70a0 + i));
+    // Flood each connected roof region and confirm it speaks with one voice.
+    const seen = new Set<number>();
+    for (let ty = 0; ty < world.tilesH; ty++) {
+      for (let tx = 0; tx < world.tilesW; tx++) {
+        const idx = ty * world.tilesW + tx;
+        if (seen.has(idx) || world.at(tx, ty) !== TileKind.Roof) continue;
+        roofsSeen++;
+        const materials = new Set<number>();
+        const stack = [[tx, ty]];
+        seen.add(idx);
+        while (stack.length > 0) {
+          const [x, y] = stack.pop()!;
+          materials.add(world.materialAt(x!, y!));
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = x! + dx!;
+            const ny = y! + dy!;
+            const ni = ny * world.tilesW + nx;
+            if (nx < 0 || ny < 0 || nx >= world.tilesW || ny >= world.tilesH) continue;
+            if (seen.has(ni) || world.at(nx, ny) !== TileKind.Roof) continue;
+            seen.add(ni);
+            stack.push([nx, ny]);
+          }
+        }
+        if (materials.size > 1) speckled++;
+      }
+    }
+  }
+  check('every roof is one material', speckled === 0 && roofsSeen > 0,
+    `${roofsSeen} roofs, ${speckled} speckled`);
+}
+
+// ---------------------------------------------------------------------------
+// Levels and the economy
+// ---------------------------------------------------------------------------
+// Curves nobody has checked are curves that drift. These are the properties a
+// player would eventually feel, stated so a careless tuning edit fails loudly.
+{
+  // Levels must round-trip: the level you are at is the level your xp says.
+  let roundTrips = true;
+  let monotonicXp = true;
+  let progressInRange = true;
+  let prev = -1;
+  for (let l = 1; l <= MAX_LEVEL; l++) {
+    const xp = xpForLevel(l);
+    if (xp <= prev) monotonicXp = false;
+    prev = xp;
+    if (levelForXp(xp) !== l) roundTrips = false;
+    const p = levelProgress(xp);
+    if (p < 0 || p > 1) progressInRange = false;
+  }
+  check('level thresholds rise and round-trip', roundTrips && monotonicXp);
+  check('level progress stays within 0..1', progressInRange);
+
+  // Hearts must cap, or the difficulty curve has nowhere left to go.
+  check('bonus hearts cap', bonusHearts(MAX_LEVEL) <= 8 && bonusHearts(1) === 0,
+    `lv1 ${bonusHearts(1)} -> lv50 ${bonusHearts(MAX_LEVEL)}`);
+
+  // The classic economy exploit: buy low, sell back, repeat. If sell ever meets
+  // or beats buy, shards become infinite and the whole shop is decoration.
+  let arbitrage = 0;
+  let priceMonotonic = true;
+  let lastPrice = -1;
+  for (let tier = 1; tier <= MAX_TIER; tier++) {
+    for (const epic of [false, true]) {
+      if (sellValue(tier, epic) >= priceOf(tier, epic)) arbitrage++;
+    }
+    const p = priceOf(tier, false);
+    if (p <= lastPrice) priceMonotonic = false;
+    lastPrice = p;
+  }
+  check('nothing can be bought and sold back at a profit', arbitrage === 0,
+    `${arbitrage} arbitrage cases`);
+  check('price rises with tier', priceMonotonic);
+
+  // Merchants stay ahead of the player, but not so far that shards skip the
+  // curve entirely.
+  // At the cap there is nothing ahead left to sell, which is the one place the
+  // rule has to bend — everywhere below it, the board must lead.
+  let stockSane = true;
+  for (let l = 1; l <= MAX_LEVEL; l++) {
+    const top = merchantTierFor(l);
+    const leads = l >= MAX_LEVEL ? top === MAX_TIER : top > l;
+    if (!leads || top > l + 6 || top > MAX_TIER) stockSane = false;
+  }
+  check('merchant stock stays just ahead of the player', stockSane,
+    `lv1 -> t${merchantTierFor(1)}, lv40 -> t${merchantTierFor(40)}, lv50 -> t${merchantTierFor(50)}`);
+
+  // A first-time player must be able to afford *something* without grinding for
+  // an hour. Roughly: a tier-4 blade for the shards a couple of rooms yield.
+  check('early gear is reachable', priceOf(4, false) < 60, `t4 costs ${priceOf(4, false)}`);
+  // And the top of the range must still be an event rather than pocket change.
+  check('late gear is a real investment', priceOf(MAX_TIER, false) > 1000,
+    `t50 costs ${priceOf(MAX_TIER, false)}`);
 }
 
 // ---------------------------------------------------------------------------

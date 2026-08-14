@@ -356,9 +356,20 @@ function drawCliff(px: PixelBuffer, rng: Rng): void {
  * Courses of overlapping tiles running down the slope, each with a lit upper lip
  * and a shadow where the next course laps over it.
  */
-function drawRoof(px: PixelBuffer, rng: Rng): void {
+/**
+ * A tiled roof seen from above.
+ *
+ * The three variants are three *materials*, not three noise seeds — fired clay,
+ * slate, and thatch. A street of houses is the one place variety has to
+ * be visible from across the screen, and shuffling the same brown three ways is
+ * not visible from anywhere.
+ */
+const ROOF_RAMPS = ['wood', 'stone', 'thatch'] as const;
+
+function drawRoof(px: PixelBuffer, rng: Rng, variant: number): void {
   const p = PAL_PROP;
-  const w = (n: number) => ci(p, `wood.${n * 2}`);
+  const ramp = ROOF_RAMPS[variant % ROOF_RAMPS.length]!;
+  const w = (n: number) => ci(p, `${ramp}.${n * 2}`);
   const T = TILE_TEX;
   const course = len(4);
   const tileW = len(5);
@@ -609,6 +620,6 @@ export const TILES: readonly TileGen[] = [
   { key: 'wall.dungeon', palette: PAL_DUNGEON, variants: 3, draw: (px, rng) => drawDungeonWall(px, rng) },
   { key: 'tree.base', palette: PAL_TERRAIN, variants: 4, draw: (px, rng) => drawTrees(px, rng) },
   { key: 'cliff.base', palette: PAL_DUNGEON, variants: 4, draw: (px, rng) => drawCliff(px, rng) },
-  { key: 'roof.base', palette: PAL_PROP, variants: 3, draw: (px, rng) => drawRoof(px, rng) },
+  { key: 'roof.base', palette: PAL_PROP, variants: 3, draw: (px, rng, v) => drawRoof(px, rng, v) },
   { key: 'cobble.base', palette: PAL_PROP, variants: 3, draw: (px, rng) => drawCobble(px, rng) },
 ];

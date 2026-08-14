@@ -129,10 +129,16 @@ export function generateTown(condition: TownCondition, rng: Rng): GeneratedTown 
   // the single number that turns a market town into a burned one.
   for (const plot of PLOTS) {
     const standing = rng.next() < profile.intact;
+    // One roof material for the whole plot, chosen once. Left to the position
+    // hash, a single house came out speckled with all three — which reads as a
+    // rendering fault rather than as a street where people built at different
+    // times out of whatever was to hand.
+    const material = rng.int(1, 3);
 
     for (let y = plot.ty; y < plot.ty + plot.h; y++) {
       for (let x = plot.tx; x < plot.tx + plot.w; x++) {
         if (standing) {
+          world.setMaterial(x, y, material);
           // A house seen from above is a roof. Drawing it as a hollow ring of
           // wall with a floor inside is what a *dungeon room* is, and it made
           // Amberwake read as a ruin with furniture even in its good years.
