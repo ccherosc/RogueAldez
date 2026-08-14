@@ -11,7 +11,7 @@ import { ART_SCALE } from '../core/const.ts';
 import { makeRng } from '../core/rng.ts';
 import type { Rng } from '../core/rng.ts';
 import { PixelBuffer, makeFbm, makeNoise, scatter } from './pixels.ts';
-import { ci, PAL_DUNGEON, PAL_TERRAIN } from './palettes.ts';
+import { ci, PAL_DUNGEON, PAL_TERRAIN, PAL_PROP } from './palettes.ts';
 import type { Palette } from './palettes.ts';
 
 /** A tile in *world* pixels — the unit the simulation moves in. Never changes. */
@@ -345,6 +345,80 @@ function drawCliff(px: PixelBuffer, rng: Rng): void {
   for (let i = 0; i < thick; i++) px.hline(0, thick + i, T, w(2));
 }
 
+/**
+ * A tiled roof, seen from above.
+ *
+ * The single biggest thing separating a town from a dungeon: you look *down* on
+ * a house, so what you see is its roof, not the inside of its walls. Rendering
+ * buildings as hollow wall outlines — which is what a dungeon room is — made
+ * Amberwake read as a ruin with furniture even in its good years.
+ *
+ * Courses of overlapping tiles running down the slope, each with a lit upper lip
+ * and a shadow where the next course laps over it.
+ */
+function drawRoof(px: PixelBuffer, rng: Rng): void {
+  const p = PAL_PROP;
+  const w = (n: number) => ci(p, `wood.${n * 2}`);
+  const T = TILE_TEX;
+  const course = len(4);
+  const tileW = len(5);
+
+  px.fill(w(1));
+  for (let row = 0; row * course < T; row++) {
+    const y = row * course;
+    // Half-lap the alternate courses, the way real tiles are laid.
+    const offset = row % 2 === 0 ? 0 : Math.floor(tileW / 2);
+    for (let x = -offset; x < T; x += tileW) {
+      const shade = rng.pick([w(1), w(1), w(2), w(0)]);
+      for (let yy = y; yy < Math.min(T, y + course - 1); yy++) {
+        for (let xx = x; xx < x + tileW - 1; xx++) {
+          px.set(((xx % T) + T) % T, yy, shade);
+        }
+      }
+      // Lit ridge along the top of each tile, shadow in the lap below it.
+      for (let t = 0; t < len(1); t++) {
+        for (let xx = x; xx < x + tileW - 1; xx++) {
+          px.set(((xx % T) + T) % T, y + t, w(2));
+          if (y + course - 1 - t < T) px.set(((xx % T) + T) % T, y + course - 1 - t, w(0));
+        }
+      }
+      // The vertical joint between neighbouring tiles.
+      px.vline(((x % T) + T) % T, y, course, w(0));
+    }
+  }
+}
+
+/**
+ * Cobbles. A street the player can tell from a dungeon floor at a glance —
+ * rounded stones with mortar between, rather than cut slabs with a seam grid.
+ */
+function drawCobble(px: PixelBuffer, rng: Rng): void {
+  // Prop stone rather than dungeon floor: the dungeon ramp bottoms out near
+  // black, which made a market street read as a hole in the ground.
+  const p = PAL_PROP;
+  const f = (n: number) => ci(p, `stone.${n * 2}`);
+  const T = TILE_TEX;
+  const r = len(2);
+
+  px.fill(f(0));
+  for (let row = 0; row * r < T + r; row++) {
+    const y = row * r;
+    const offset = row % 2 === 0 ? 0 : Math.floor(r / 2);
+    for (let x = -offset; x < T; x += r) {
+      const shade = rng.pick([f(1), f(2), f(2), f(1)]);
+      for (let dy = 0; dy < r - 1; dy++) {
+        for (let dx = 0; dx < r - 1; dx++) {
+          // Knock the corners off so each stone reads as rounded.
+          if ((dx === 0 || dx === r - 2) && (dy === 0 || dy === r - 2)) continue;
+          const tx = (((x + dx) % T) + T) % T;
+          const ty = (y + dy) % T;
+          px.set(tx, ty, dy === 0 ? f(2) : dy === r - 2 ? f(0) : shade);
+        }
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Autotiling — corner-based, covers all 256 neighbour masks
 // ---------------------------------------------------------------------------
@@ -535,4 +609,6 @@ export const TILES: readonly TileGen[] = [
   { key: 'wall.dungeon', palette: PAL_DUNGEON, variants: 3, draw: (px, rng) => drawDungeonWall(px, rng) },
   { key: 'tree.base', palette: PAL_TERRAIN, variants: 4, draw: (px, rng) => drawTrees(px, rng) },
   { key: 'cliff.base', palette: PAL_DUNGEON, variants: 4, draw: (px, rng) => drawCliff(px, rng) },
+  { key: 'roof.base', palette: PAL_PROP, variants: 3, draw: (px, rng) => drawRoof(px, rng) },
+  { key: 'cobble.base', palette: PAL_PROP, variants: 3, draw: (px, rng) => drawCobble(px, rng) },
 ];

@@ -81,11 +81,14 @@ export function generateTown(condition: TownCondition, rng: Rng): GeneratedTown 
   const W = TOWN_COLS * ROOM_TILES_W;
   const H = TOWN_ROWS * ROOM_TILES_H;
 
-  // Ground: packed earth inside the walls, grass beyond.
+  // Ground: grass everywhere, inside the walls as well as out.
+  //
+  // The first version paved the whole interior in packed earth, which put a
+  // uniform tan field under everything and left roofs, street and ground reading
+  // as three shades of the same brown. Yards and gardens between the houses give
+  // the eye somewhere to rest and make the cobbled street actually read as a
+  // street, because it is the only paved thing in view.
   world.fillTiles(TileKind.Grass);
-  for (let y = 2; y < H - 2; y++) {
-    for (let x = 2; x < W - 2; x++) world.setTile(x, y, TileKind.Dirt);
-  }
 
   // The curtain wall, with a gate south and north. The wall is what makes a town
   // feel like somewhere you *enter* rather than somewhere the grass stops.
@@ -106,42 +109,54 @@ export function generateTown(condition: TownCondition, rng: Rng): GeneratedTown 
   // The main street: paved, gate to gate, with the square in the middle.
   const streetY = Math.floor(H / 2);
   for (let x = 2; x < W - 2; x++) {
-    for (let dy = -2; dy <= 2; dy++) world.setTile(x, streetY + dy, TileKind.Floor);
+    for (let dy = -2; dy <= 2; dy++) world.setTile(x, streetY + dy, TileKind.Cobble);
   }
   for (let y = streetY - 5; y <= streetY + 5; y++) {
     for (let x = gateX - 6; x <= gateX + 6; x++) {
-      if (x > 2 && x < W - 3 && y > 2 && y < H - 3) world.setTile(x, y, TileKind.Floor);
+      if (x > 2 && x < W - 3 && y > 2 && y < H - 3) world.setTile(x, y, TileKind.Cobble);
     }
+  }
+  // The approach through both gates is paved too, so the road reads as continuing
+  // through the wall rather than stopping at it.
+  for (let d = -2; d <= 2; d++) {
+    world.setTile(gateX + d, 1, TileKind.Cobble);
+    world.setTile(gateX + d, H - 2, TileKind.Cobble);
+    for (let y = 2; y < streetY; y++) world.setTile(gateX + d, y, TileKind.Cobble);
+    for (let y = streetY; y < H - 2; y++) world.setTile(gateX + d, y, TileKind.Cobble);
   }
 
   // Buildings. `intact` decides whether a plot is a house, a shell or rubble —
   // the single number that turns a market town into a burned one.
   for (const plot of PLOTS) {
-    const state = rng.next();
-    const standing = state < profile.intact;
-    const material = standing ? TileKind.Wall : TileKind.Cliff;
+    const standing = rng.next() < profile.intact;
 
     for (let y = plot.ty; y < plot.ty + plot.h; y++) {
       for (let x = plot.tx; x < plot.tx + plot.w; x++) {
-        const edge = x === plot.tx || x === plot.tx + plot.w - 1
-          || y === plot.ty || y === plot.ty + plot.h - 1;
         if (standing) {
-          world.setTile(x, y, edge ? material : TileKind.Floor);
-        } else if (rng.chance(0.55)) {
-          // A ruin is a broken outline, not a filled block: you should be able to
-          // walk through what is left and see it was a room.
-          world.setTile(x, y, edge && rng.chance(0.6) ? material : TileKind.Dirt);
+          // A house seen from above is a roof. Drawing it as a hollow ring of
+          // wall with a floor inside is what a *dungeon room* is, and it made
+          // Amberwake read as a ruin with furniture even in its good years.
+          world.setTile(x, y, TileKind.Roof);
         } else {
-          world.setTile(x, y, TileKind.Dirt);
+          // A burned plot is a broken footprint you can walk through: some
+          // standing masonry, the rest bare ground where the floor used to be.
+          const edge = x === plot.tx || x === plot.tx + plot.w - 1
+            || y === plot.ty || y === plot.ty + plot.h - 1;
+          world.setTile(x, y, edge && rng.chance(0.5) ? TileKind.Wall : TileKind.Dirt);
         }
       }
     }
 
-    // The door, always on the street side, so every building addresses the road.
+    // The doorstep, on the street side: a paved threshold under the eaves so
+    // every building visibly addresses the road.
     const doorY = plot.doorSide === 's' ? plot.ty + plot.h - 1 : plot.ty;
     const doorX = plot.tx + Math.floor(plot.w / 2);
-    world.setTile(doorX, doorY, TileKind.Floor);
-    if (standing) world.addProp('prop.torch.0', doorX + 1, doorY);
+    const step = plot.doorSide === 's' ? doorY + 1 : doorY - 1;
+    world.setTile(doorX, step, TileKind.Cobble);
+    if (standing) {
+      world.addProp('prop.torch.0', doorX + 1, step);
+      world.addProp('prop.crate', doorX - 1, step);
+    }
   }
 
   // The well: the fixed point of the town, in every condition. Recognising it is

@@ -23,6 +23,9 @@ export interface HudState {
   draftLine: string;
   /** dimmer second line — the Draft's history under the region name */
   subLine?: string;
+  /** current level, and progress toward the next, 0..1 */
+  level?: number;
+  levelProgress?: number;
   /** debug: invincibility is on — must be unmissable so it never taints a playtest */
   god?: boolean;
   /** transient centred message, e.g. the room-clear flourish */
@@ -76,8 +79,21 @@ export function drawHud(batch: SpriteBatch, state: HudState): void {
     }
   }
 
-  drawText(batch, MARGIN, MARGIN + 10, state.draftLine, 0.8);
-  if (state.subLine) drawText(batch, MARGIN, MARGIN + 15, state.subLine, 0.45);
+  // Level sits under the hearts with a thin progress rule: the number tells you
+  // where you are, the bar tells you whether the last fight was worth it.
+  if (state.level !== undefined) {
+    drawText(batch, MARGIN, MARGIN + 10, `lv ${state.level}`, 0.9);
+    const barX = MARGIN + 16;
+    const filled = Math.round((state.levelProgress ?? 0) * 7);
+    for (let i = 0; i < 7; i++) {
+      batch.draw('ui.rule', barX + i * 4, MARGIN + 12, {
+        alpha: i < filled ? 0.85 : 0.2, scale: UI_SCALE,
+      });
+    }
+  }
+
+  drawText(batch, MARGIN, MARGIN + 18, state.draftLine, 0.8);
+  if (state.subLine) drawText(batch, MARGIN, MARGIN + 24, state.subLine, 0.45);
 
   if (state.god) {
     // Deliberately loud. A playtest with god mode silently on is a playtest

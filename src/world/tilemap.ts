@@ -19,6 +19,10 @@ export const TileKind = {
   Tree: 5,
   /** Rock face — a mountain barrier. Solid. */
   Cliff: 6,
+  /** A tiled roof seen from above. Solid — you walk around houses, not through. */
+  Roof: 7,
+  /** Cobbled street. Walkable, and unmistakably a town. */
+  Cobble: 8,
 } as const;
 export type TileKind = (typeof TileKind)[keyof typeof TileKind];
 
@@ -91,7 +95,8 @@ export class World {
       kind === TileKind.Wall ||
       kind === TileKind.Water ||
       kind === TileKind.Tree ||
-      kind === TileKind.Cliff
+      kind === TileKind.Cliff ||
+      kind === TileKind.Roof
     );
   }
 
@@ -224,5 +229,9 @@ export function tileKey(world: World, tx: number, ty: number, tick: number): str
       return `tree.base.${Math.floor(h * 4)}`;
     case TileKind.Cliff:
       return `cliff.base.${Math.floor(h * 4)}`;
+    case TileKind.Roof:
+      return `roof.base.${Math.floor(h * 3)}`;
+    case TileKind.Cobble:
+      return `cobble.base.${Math.floor(h * 3)}`;
   }
 }

@@ -58,6 +58,10 @@ import { drawMenu, menuLength, BOSS_ITEMS } from '../ui/menu.ts';
 import { Tutor, LESSON_IDS } from '../ui/tutor.ts';
 import { drawPack, drawOffer } from '../ui/pack.ts';
 import { drawTalk } from '../ui/talk.ts';
+import { drawShop } from '../ui/shop.ts';
+import {
+  levelForXp, levelProgress, xpForKill, bonusHearts, merchantTierFor, priceOf, sellValue,
+} from '../chronicle/level.ts';
 import { generateTown, TOWN_COLS, TOWN_ROWS } from '../gen/town.ts';
 import type { TownResident } from '../gen/town.ts';
 import { CONDITION_PROFILES, TOWN_CONDITIONS } from '../worldgen/townsfolk.ts';
@@ -139,7 +143,7 @@ interface Drawable {
   flash?: number;
 }
 
-export type SceneMode = 'playing' | 'revising' | 'reliquary' | 'menu' | 'pack' | 'offer' | 'talk';
+export type SceneMode = 'playing' | 'revising' | 'reliquary' | 'menu' | 'pack' | 'offer' | 'talk' | 'shop';
 
 export class Scene {
   world!: World;
@@ -202,6 +206,15 @@ export class Scene {
   private nearFolk: TownResident | null = null;
   /** guards hunting the player after an assault */
   private townAlarm = 0;
+  /**
+   * Experience, and therefore level. Session-scoped like gear: the world is
+   * rewritten and Aldez is not, so every life starts further along than the last.
+   */
+  xp = 0;
+  private shopStock: GearItem[] = [];
+  private shopSide: 'buy' | 'sell' = 'buy';
+  private shopCursor = 0;
+  private levelBanner = 0;
   private inTown = false;
   /** the road marker in the meadow that leads to Amberwake */
   private townGate: Entity | null = null;
@@ -1251,6 +1264,100 @@ export class Scene {
     music.setMood(this.biome.mode, this.biome.root * 0.75);
   }
 
+  get level(): number {
+    return levelForXp(this.xp);
+  }
+
+  /**
+   * Pay out for a kill, and announce a level when one lands.
+   *
+   * Extra hearts are granted rather than healed: reaching a new level should not
+   * be a free full heal, or the optimal play becomes farming trash at low health.
+   */
+  private awardXp(e: Entity): void {
+    const before = this.level;
+    const isBoss = e.variant === 'warden' || e.variant === 'hulk' || e.variant === 'colossus';
+    this.xp += xpForKill(Math.max(1, e.hp + 1), e.contactDamage, isBoss);
+    const now = this.level;
+    if (now > before) {
+      const gained = bonusHearts(now) - bonusHearts(before);
+      if (gained > 0) {
+        this.player.maxHealth += gained * HEART_UNITS;
+        this.player.heal(gained * HEART_UNITS);
+      }
+      this.levelBanner = 150;
+      sfx.relic();
+    }
+  }
+
+  /** Open a trader's board, stocked to the player's standing. */
+  private beginShop(resident: TownResident): void {
+    const rng = this.rng.stream(`shop:${resident.id}:${this.draft.seed}:${this.level}`);
+    const top = merchantTierFor(this.level);
+    this.shopStock = [];
+    for (let i = 0; i < 5; i++) {
+      // Spread around the player's standing so the board holds something
+      // affordable now and something worth coming back for.
+      const tier = Math.max(1, top - rng.int(0, 6) + rng.int(0, 2));
+      const roll = rng.next();
+      this.shopStock.push(roll < 0.65
+        ? makeWeapon(rng.pick(WEAPON_TYPES), tier)
+        : makeArmour(tier));
+    }
+    this.shopSide = 'buy';
+    this.shopCursor = 0;
+    this.mode = 'shop';
+    sfx.pickup();
+  }
+
+  /** What the player is carrying that a trader would take. */
+  private sellable(): GearItem[] {
+    return this.pack.all.filter((i) =>
+      i.uid !== this.pack.equippedWeapon?.uid && i.uid !== this.pack.equippedArmour?.uid);
+  }
+
+  private updateShop(input: InputSnapshot): void {
+    const list = this.shopSide === 'buy' ? this.shopStock : this.sellable();
+    if (input.cyclePressed) {
+      this.shopSide = this.shopSide === 'buy' ? 'sell' : 'buy';
+      this.shopCursor = 0;
+      sfx.menuMove();
+    }
+    if (list.length > 0) {
+      if (input.upPressed) {
+        this.shopCursor = (this.shopCursor + list.length - 1) % list.length;
+        sfx.menuMove();
+      }
+      if (input.downPressed) {
+        this.shopCursor = (this.shopCursor + 1) % list.length;
+        sfx.menuMove();
+      }
+      if (input.attackPressed) {
+        const item = list[this.shopCursor];
+        if (item && this.shopSide === 'buy') {
+          const cost = priceOf(item.tier, item.epic ?? false);
+          if (this.amber >= cost) {
+            this.amber -= cost;
+            this.shopStock = this.shopStock.filter((s) => s.uid !== item.uid);
+            this.shopCursor = 0;
+            this.giveGear(item, this.player.x, this.player.y);
+            return; // giveGear may open the swap prompt over the shop
+          }
+          sfx.hitBlocked();
+        } else if (item) {
+          this.amber += sellValue(item.tier, item.epic ?? false);
+          this.pack.drop(item.uid);
+          this.shopCursor = 0;
+          sfx.pickup();
+        }
+      }
+    }
+    if (input.actionPressed || input.menuPressed) {
+      this.mode = 'playing';
+      this.talkingTo = null;
+    }
+  }
+
   /** Back out of the gate and into the meadow you came from. */
   leaveTown(): void {
     this.town = null;
@@ -1375,8 +1482,19 @@ export class Scene {
       return;
     }
 
+    if (this.mode === 'shop') {
+      this.updateShop(input);
+      return;
+    }
+
     // Talking. The world pauses; the town stays visible behind the box.
     if (this.mode === 'talk') {
+      // Z opens the board when they have one. The trade is a continuation of
+      // the conversation, not a separate mode you enter from somewhere else.
+      if (input.attackPressed && this.talkingTo?.shop) {
+        this.beginShop(this.talkingTo);
+        return;
+      }
       if (input.actionPressed || input.menuPressed) {
         this.talkingTo = null;
         this.mode = 'playing';
@@ -1558,6 +1676,7 @@ export class Scene {
       if (this.actBanner > 0) this.actBanner--;
       if (this.hintFrames > 0) this.hintFrames--;
       if (this.pickupBanner > 0) this.pickupBanner--;
+      if (this.levelBanner > 0) this.levelBanner--;
       music.setIntensity(this.musicIntensity());
 
       if (this.player.dead) {
@@ -1867,6 +1986,7 @@ export class Scene {
     if (e.kind === 'enemy') {
       this.enemiesKilled++;
       this.metaKills++;
+      this.awardXp(e);
       this.brains.forget(e.id);
       this.amber += this.effects.amberPerKill;
       // Felling something huge pays like it felt: a bigger burst, a real shake,
@@ -2247,7 +2367,18 @@ export class Scene {
     // UI pass: flat. Text and hearts have no surface for a torch to rake across.
     batch.setNormalMix(0);
     batch.begin(0, 0, viewport.w, viewport.h);
-    if (this.mode === 'talk' && this.talkingTo) {
+    if (this.mode === 'shop' && this.talkingTo) {
+      drawShop(batch, {
+        trader: this.talkingTo.name,
+        role: this.talkingTo.role,
+        stock: this.shopStock,
+        sellable: this.sellable(),
+        side: this.shopSide,
+        cursor: this.shopCursor,
+        shards: this.amber,
+        level: this.level,
+      }, this.tick);
+    } else if (this.mode === 'talk' && this.talkingTo) {
       const r = this.talkingTo;
       drawTalk(batch, {
         name: r.name,
@@ -2291,6 +2422,8 @@ export class Scene {
         health: this.player.health,
         maxHealth: this.player.maxHealth,
         amber: this.amber,
+        level: this.level,
+        levelProgress: levelProgress(this.xp),
         ...(this.invincible ? { god: true } : {}),
         ...(this.loadout.selected
           ? { itemIcon: this.loadout.selected.icon, itemAmmo: this.loadout.selectedAmmo }
@@ -2308,6 +2441,11 @@ export class Scene {
           ? this.actBanner
           : this.clearPulse > 0 ? this.clearPulse : this.barredRoom ? 40 : 0,
       });
+
+      if (this.levelBanner > 0) {
+        const a = Math.min(1, this.levelBanner / 30) * 0.95;
+        drawTextCentred(batch, viewport.w / 2, 50, `level ${this.level}`, a);
+      }
 
       // What you just picked up, and whether it went straight on. Loot the
       // player does not notice is loot that did not happen.
