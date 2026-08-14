@@ -18,7 +18,7 @@ import type { GearItem, WeaponType } from '../chronicle/gear.ts';
 import { makeWeapon, weaponStats, armourReduction, isUpgrade } from '../chronicle/gear.ts';
 
 /** Above this the pack is full and the weakest thing is dropped to make room. */
-const CAPACITY = 24;
+const CAPACITY = 100;
 
 export class Inventory {
   private items: GearItem[] = [];
@@ -48,26 +48,32 @@ export class Inventory {
   }
 
   /**
-   * Take something. Auto-equips a strict upgrade, because making the player open
-   * a menu to accept an obviously better sword is friction with no decision in
-   * it — the interesting choice is *sword versus axe*, not *better versus worse*.
+   * Take something.
+   *
+   * Reports whether it is an upgrade rather than silently equipping it. Auto-
+   * equipping is convenient right up to the moment it swaps the axe you were
+   * deliberately carrying for a marginally stronger sword — the game cannot know
+   * that "better damage" is what you wanted. The caller offers the choice.
    */
-  add(item: GearItem): { equipped: boolean } {
+  add(item: GearItem): { isUpgrade: boolean } {
     this.items.push(item);
     this.lastPickup = item;
 
-    let equipped = false;
-    if (item.kind === 'weapon' && isUpgrade(item, this.equippedWeapon)) {
-      this.equippedWeapon = item;
-      equipped = true;
-    }
-    if (item.kind === 'armour' && isUpgrade(item, this.equippedArmour)) {
-      this.equippedArmour = item;
-      equipped = true;
-    }
+    const better = item.kind === 'weapon'
+      ? isUpgrade(item, this.equippedWeapon)
+      : item.kind === 'armour'
+        ? isUpgrade(item, this.equippedArmour)
+        : false;
 
     this.trim();
-    return { equipped };
+    return { isUpgrade: better };
+  }
+
+  /** What the offered item would replace, for the comparison line. */
+  currentFor(item: GearItem): GearItem | null {
+    if (item.kind === 'weapon') return this.equippedWeapon;
+    if (item.kind === 'armour') return this.equippedArmour;
+    return null;
   }
 
   equip(uid: number): void {

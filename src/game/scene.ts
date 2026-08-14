@@ -56,9 +56,13 @@ import { drawTextCentred } from '../ui/text.ts';
 import type { LightBuffer } from '../render/lights.ts';
 import { drawMenu, menuLength, BOSS_ITEMS } from '../ui/menu.ts';
 import { Tutor, LESSON_IDS } from '../ui/tutor.ts';
-import { drawPack } from '../ui/pack.ts';
+import { drawPack, drawOffer } from '../ui/pack.ts';
 import { Inventory } from './inventory.ts';
-import { dropTier, makeWeapon, makeArmour, makeTreasure, WEAPON_TYPES } from '../chronicle/gear.ts';
+import {
+  dropTier, makeWeapon, makeArmour, makeTreasure, makeEpicWeapon, makeEpicArmour, WEAPON_TYPES,
+  MAX_TIER,
+} from '../chronicle/gear.ts';
+import type { GearItem } from '../chronicle/gear.ts';
 import type { MenuState, PadStatus } from '../ui/menu.ts';
 import { drawRevision, revisionReadyAt } from '../ui/revision.ts';
 import type { SolidQuery } from '../physics/collide.ts';
@@ -84,6 +88,16 @@ interface PropStats {
 }
 
 /** How far in front of Aldez a prop can be and still be grabbed. */
+/**
+ * Bosses that always leave a named trophy. The name is the reward as much as
+ * the numbers are - `warden cleaver` is a story, `iron axe` is an item.
+ */
+const BOSS_TROPHY: Record<string, string> = {
+  warden: 'warden',
+  hulk: 'hulk',
+  colossus: 'colossus',
+};
+
 const LIFT_REACH = 18;
 /** Moat thickness in tiles — mirrors gen/floor.ts. */
 const MOAT = 2;
@@ -97,7 +111,7 @@ const PROP_STATS: Record<string, PropStats> = {
   'prop.flower': { solid: false, breakable: true, debris: 'fx.leaf' },
   // A standing tree shrugs off blades — only a blast (or a future axe) fells it.
   'prop.tree': { solid: true, breakable: true, armored: true, hp: 2, debris: 'fx.splinter' },
-  'prop.pot': { solid: true, breakable: true, liftable: true, debris: 'fx.shard', drop: 'pickup.rupee', dropChance: 0.5 },
+  'prop.pot': { solid: true, breakable: true, liftable: true, debris: 'fx.shard', drop: 'pickup.shard', dropChance: 0.5 },
   // Chests take a hit to open rather than to break — breakable so the sword
   // registers, but they turn into an open chest and spill loot instead of dying.
   'prop.chest.closed': { solid: true, breakable: true, debris: 'fx.spark', hp: 1, opens: true },
@@ -119,7 +133,7 @@ interface Drawable {
   flash?: number;
 }
 
-export type SceneMode = 'playing' | 'revising' | 'reliquary' | 'menu' | 'pack';
+export type SceneMode = 'playing' | 'revising' | 'reliquary' | 'menu' | 'pack' | 'offer';
 
 export class Scene {
   world!: World;
@@ -172,6 +186,9 @@ export class Scene {
    */
   readonly pack = new Inventory();
   private packCursor = 0;
+  /** gear awaiting a yes/no swap decision */
+  private offer: GearItem | null = null;
+  private offerYes = true;
   private pickupBanner = 0;
   /** contextual teaching; learned flags persist so a veteran is never re-taught */
   readonly tutor: Tutor;
@@ -560,7 +577,7 @@ export class Scene {
       this.particles.burst(this.player.x, this.player.y - 8, {
         key: 'fx.spark', count: 20, speed: 2.0, lift: 2.4,
       });
-      sfx.descend();
+      sfx.stairs(true);
       this.act = actAt(target.act);
       this.loadDraft(this.draft, 0);
       this.seedArrivalFoes();
@@ -858,7 +875,7 @@ export class Scene {
         this.mode = 'playing';
         this.menu.screen = 'root';
         this.showRebirthHint();
-        sfx.descend();
+        sfx.stairs(true);
         break;
       }
 
@@ -1093,10 +1110,28 @@ export class Scene {
         ? makeArmour(tier)
         : makeTreasure(tier);
 
-    const { equipped } = this.pack.add(item);
-    this.pickupBanner = equipped ? 150 : 110;
+    this.giveGear(item, x, y);
+  }
+
+  /**
+   * Hand over a piece of gear, offering the swap when it is an upgrade.
+   *
+   * Anything that is not a straight improvement goes quietly into the pack —
+   * interrupting a fight to ask about a rusted spear is worse than useless. An
+   * upgrade pauses and asks, because the game cannot know whether the axe you
+   * are carrying was a choice.
+   */
+  private giveGear(item: GearItem, x: number, y: number): void {
+    const { isUpgrade: better } = this.pack.add(item);
+    this.pickupBanner = 110;
     sfx.relic();
     this.particles.burst(x, y - 8, { key: 'fx.spark', count: 10, speed: 1.4, lift: 1.8 });
+
+    if (better && !this.fixture) {
+      this.offer = item;
+      this.offerYes = true;
+      this.mode = 'offer';
+    }
   }
 
   /**
@@ -1108,6 +1143,29 @@ export class Scene {
    */
   private afterArmour(damage: number): number {
     return Math.max(1, damage - this.pack.damageReduction);
+  }
+
+  /**
+   * A boss trophy: guaranteed, and a clear step above whatever the floor was
+   * otherwise dropping.
+   *
+   * Pitched at the top of the local band rather than a fixed tier, so beating
+   * the first Warden with a rusted sword is transformative and beating one on
+   * floor eight is merely good.
+   */
+  private dropTrophy(bossName: string, x: number, y: number): void {
+    const rng = this.rng.stream(`trophy:${bossName}:${this.draft.seed}:${this.depth}`);
+    const tier = Math.min(
+      MAX_TIER,
+      dropTier(tierFor(this.act.pressure, this.depth), 0.95) + 4,
+    );
+    const item = rng.chance(0.72)
+      ? makeEpicWeapon(bossName, rng.pick(WEAPON_TYPES), tier)
+      : makeEpicArmour(bossName, tier);
+
+    this.giveGear(item, x, y);
+    this.camera.shake(3, 12);
+    this.particles.burst(x, y - 12, { key: 'fx.spark', count: 24, speed: 2.2, lift: 2.6 });
   }
 
   private beginRevision(): void {
@@ -1154,6 +1212,28 @@ export class Scene {
       this.mode = this.mode === 'pack' ? 'playing' : 'pack';
       this.packCursor = 0;
       sfx.menuMove();
+      return;
+    }
+
+    // The swap offer: one question, two answers, no menu to learn.
+    if (this.mode === 'offer') {
+      if (input.upPressed || input.downPressed || input.cyclePressed) {
+        this.offerYes = !this.offerYes;
+        sfx.menuMove();
+      }
+      if (input.attackPressed) {
+        if (this.offerYes && this.offer) {
+          this.pack.equip(this.offer.uid);
+          sfx.pickup();
+        }
+        this.offer = null;
+        this.mode = 'playing';
+      }
+      // X is always "no" — declining should never need the cursor moved first.
+      if (input.actionPressed) {
+        this.offer = null;
+        this.mode = 'playing';
+      }
       return;
     }
 
@@ -1494,7 +1574,7 @@ export class Scene {
     for (let i = 0; i < spoils; i++) {
       this.entities.spawn({
         kind: 'pickup',
-        spriteKey: 'pickup.rupee',
+        spriteKey: 'pickup.shard',
         x: cx + this.rng.stream('spoils').range(-20, 20),
         y: cy + this.rng.stream('spoils').range(-14, 14),
         halfW: 5,
@@ -1570,8 +1650,11 @@ export class Scene {
         // direction sends things sideways at the arc extremes and looks wrong.
         // Weapon first, relics on top. A tier-50 axe should feel like a tier-50
         // axe whether or not the Belliron Edge has been awakened.
+        // Doubled while the Warden stands open. The reward for reading the tell
+        // has to be worth the wait, or waiting is just a slower way to fight.
         const damage = (this.pack.weaponDamage + this.effects.swordDamage - 1)
-          * (sword.isSpin ? 2 : 1);
+          * (sword.isSpin ? 2 : 1)
+          * (this.brains.isOpen(e) ? 2 : 1);
         const landed = this.entities.hit(e, sword.swingId, damage, e.x - px, e.y - (py - 9));
         if (landed) this.onHit(e, sword.isSpin);
       }
@@ -1593,9 +1676,12 @@ export class Scene {
       this.amber += this.effects.amberPerKill;
       // Felling something huge pays like it felt: a bigger burst, a real shake,
       // and amber worth the fight.
-      // Ordinary kills rarely pay; the big ones nearly always do. Loot that
-      // falls constantly stops being loot.
-      this.tryDrop(e.x, e.y, e.variant === 'hulk' || e.variant === 'colossus' ? 0.9 : 0.07);
+      // A boss always leaves a trophy, named after itself. That certainty is the
+      // whole point — a boss that might drop nothing teaches the player that
+      // fighting it was optional.
+      const bossName = BOSS_TROPHY[e.variant];
+      if (bossName) this.dropTrophy(bossName, e.x, e.y);
+      else this.tryDrop(e.x, e.y, 0.07);
 
       if (e.variant === 'hulk' || e.variant === 'colossus') {
         const big = e.variant === 'colossus';
@@ -1632,7 +1718,7 @@ export class Scene {
       const haul = 3 + this.rng.stream('chest').int(0, 3);
       for (let i = 0; i < haul; i++) {
         this.entities.spawn({
-          kind: 'pickup', spriteKey: 'pickup.rupee',
+          kind: 'pickup', spriteKey: 'pickup.shard',
           x: e.x + this.rng.stream('chest').range(-14, 14),
           y: e.y - 4 + this.rng.stream('chest').range(-8, 8),
           halfW: 5, boxH: 10, solid: false, breakable: false,
@@ -1642,7 +1728,7 @@ export class Scene {
         kind: 'pickup', spriteKey: 'pickup.heart',
         x: e.x, y: e.y - 16, halfW: 5, boxH: 10, solid: false, breakable: false,
       });
-      // A chest always yields gear. Opening one and getting three rupees is the
+      // A chest always yields gear. Opening one and getting three shards is the
       // most disappointing thing a game can do with a chest.
       this.tryDrop(e.x, e.y, 1);
       bus.emit('chest:opened', { x: e.x, y: e.y });
@@ -1888,7 +1974,7 @@ export class Scene {
       const stunned = e.kind === 'enemy' && e.hitstunFrames > ENEMY_HITSTUN_FRAMES;
       const shiver = stunned ? (((this.tick >> 2) & 1) === 0 ? 1 : -1) : 0;
       this.drawList.push({
-        key: spriteKeyFor(e, this.tick),
+        key: spriteKeyFor(e, this.tick, this.brains.isOpen(e)),
         x: e.x + shiver,
         y: e.y + bob,
         flash: e.flashFrames > 0 ? 1 : 0,
@@ -1962,7 +2048,9 @@ export class Scene {
     // UI pass: flat. Text and hearts have no surface for a torch to rake across.
     batch.setNormalMix(0);
     batch.begin(0, 0, viewport.w, viewport.h);
-    if (this.mode === 'pack') {
+    if (this.mode === 'offer' && this.offer) {
+      drawOffer(batch, this.offer, this.pack.currentFor(this.offer), this.offerYes);
+    } else if (this.mode === 'pack') {
       drawPack(batch, {
         items: this.pack.all,
         cursor: this.packCursor,
@@ -2096,7 +2184,11 @@ function clampCamera(value: number, worldSize: number, viewSize: number): number
   return Math.max(0, Math.min(worldSize - viewSize, value));
 }
 
-function spriteKeyFor(e: Entity, tick: number): string {
+function spriteKeyFor(e: Entity, tick: number, open = false): string {
+  // The Warden's keyhole lights while it is recovering. Passing the state in
+  // keeps Brains.spriteKey a pure function of the entity, and puts the one
+  // exception where the caller already knows the answer.
+  if (e.variant === 'warden') return `warden.${open ? 'open' : 'walk'}.${e.animFrame}`;
   if (e.kind === 'enemy') return Brains.spriteKey(e);
   if (e.spriteKey.startsWith('prop.torch')) return `prop.torch.${Math.floor(tick / 8) % 2}`;
   if (e.spriteKey.startsWith('prop.teleporter')) {

@@ -648,6 +648,56 @@ function colossusSprite(frame: number): PixelBuffer {
   return px;
 }
 
+/**
+ * The Warden — the first boss, 32x32.
+ *
+ * An Erratum of a locked door: what a gate remembers about itself after the
+ * building around it stopped existing. Reads as *barrier* first and creature
+ * second, which is the right first impression for a thing standing between the
+ * player and the stairs.
+ *
+ * The one bright thing on it is the keyhole, and that is where the player must
+ * hit it — a boss whose weak point you can see is a boss a first-timer can beat.
+ */
+function wardenSprite(frame: number, open: boolean): PixelBuffer {
+  const P = PAL_DUNGEON;
+  const w = (n: number) => ci(P, `wall.${n}`);
+  const f = (n: number) => ci(P, `floor.${n}`);
+  const t = (n: number) => ci(P, `torch.${n}`);
+  const px = new PixelBuffer(32, 32);
+  const sway = frame === 0 ? 0 : 1;
+
+  // Squat legs — it walks, but it was never meant to.
+  px.rect(7, 26, 6, 5, w(2));
+  px.rect(19, 26, 6, 5, w(2));
+  px.rect(6, 30, 8, 2, w(0));
+  px.rect(18, 30, 8, 2, w(0));
+
+  // The door itself: a slab with banded iron across it.
+  px.rect(4, 4 + sway, 24, 23, w(3));
+  px.hline(4, 4 + sway, 24, w(5));
+  px.vline(4, 4 + sway, 23, w(5));
+  px.vline(27, 4 + sway, 23, w(1));
+  px.hline(4, 26 + sway, 24, w(0));
+  for (const by of [9, 17]) {
+    px.rect(4, by + sway, 24, 3, w(1));
+    px.hline(4, by + sway, 24, w(4));
+    px.hline(4, by + 2 + sway, 24, w(0));
+  }
+
+  // Keyhole. Lit when the Warden is recovering and open to a hit.
+  const glow = open ? t(2) : f(1);
+  px.rect(14, 12 + sway, 4, 4, glow);
+  px.rect(15, 15 + sway, 2, 4, glow);
+  if (open) {
+    px.set(15, 13 + sway, t(1));
+    px.set(16, 13 + sway, t(1));
+  }
+
+  px.outline(ci(P, 'outline'), 'all');
+  return px;
+}
+
 export function enemyFrames(): SpriteFrame[] {
   const out: SpriteFrame[] = [];
   for (const dir of DIRS) {
@@ -674,6 +724,18 @@ export function enemyFrames(): SpriteFrame[] {
       buffer: keeseFrame(f),
       palette: PAL_KEESE,
       anchor: ENEMY_ANCHOR,
+    });
+    out.push({
+      key: `warden.walk.${f}`,
+      buffer: wardenSprite(f, false),
+      palette: PAL_DUNGEON,
+      anchor: [16, 31],
+    });
+    out.push({
+      key: `warden.open.${f}`,
+      buffer: wardenSprite(f, true),
+      palette: PAL_DUNGEON,
+      anchor: [16, 31],
     });
     out.push({
       key: `hulk.walk.${f}`,
@@ -728,7 +790,8 @@ function heartSprite(): PixelBuffer {
   return px;
 }
 
-function rupeeSprite(): PixelBuffer {
+/** An amber shard - the currency of a world that keeps forgetting its coins. */
+function shardSprite(): PixelBuffer {
   const P = PAL_PICKUP;
   const px = new PixelBuffer(16, 16);
   const r = (n: number) => ci(P, `rupee.${n * 2}`);
@@ -1407,7 +1470,7 @@ export function propFrames(): SpriteFrame[] {
   const a: [number, number] = [8, 15];
   return [
     { key: 'pickup.heart', buffer: heartSprite(), palette: PAL_PICKUP, anchor: a },
-    { key: 'pickup.rupee', buffer: rupeeSprite(), palette: PAL_PICKUP, anchor: a },
+    { key: 'pickup.shard', buffer: shardSprite(), palette: PAL_PICKUP, anchor: a },
     { key: 'prop.pot', buffer: potSprite(), palette: PAL_PROP, anchor: a },
     { key: 'prop.bush', buffer: bushSprite(), palette: PAL_TERRAIN, anchor: a },
     { key: 'prop.chest.closed', buffer: chestSprite(false), palette: PAL_PROP, anchor: a },

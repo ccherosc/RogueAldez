@@ -126,6 +126,8 @@ export interface GearItem {
   type?: WeaponType;
   /** treasure only: what a trader would pay */
   value?: number;
+  /** dropped by a boss and named after it; always worth keeping */
+  epic?: boolean;
 }
 
 let nextUid = 1;
@@ -142,6 +144,49 @@ export function makeWeapon(type: WeaponType, tier: number): GearItem {
 
 export function makeArmour(tier: number): GearItem {
   return { uid: nextUid++, kind: 'armour', tier, name: `${bandFor(tier)} mail` };
+}
+
+/**
+ * The noun a weapon type takes when it is named after the thing that dropped it.
+ *
+ * "warden axe" is a description; "warden cleaver" is a trophy. A boss weapon has
+ * to sound like it came off something specific, or the 100% drop is just another
+ * roll with better numbers.
+ */
+const EPIC_NOUNS: Record<WeaponType, string> = {
+  sword: 'edge',
+  axe: 'cleaver',
+  spear: 'lance',
+  bow: 'span',
+};
+
+/**
+ * A boss drop: always superior to the tier that produced it, and named after
+ * what died to give it up.
+ *
+ * No apostrophes — the bitmap font has letters, digits and little else, and a
+ * possessive would render as a question mark in the middle of the reward.
+ */
+export function makeEpicWeapon(bossName: string, type: WeaponType, tier: number): GearItem {
+  const t = Math.max(1, Math.min(MAX_TIER, tier));
+  return {
+    uid: nextUid++,
+    kind: 'weapon',
+    type,
+    tier: t,
+    epic: true,
+    name: `${bossName} ${EPIC_NOUNS[type]}`,
+  };
+}
+
+export function makeEpicArmour(bossName: string, tier: number): GearItem {
+  return {
+    uid: nextUid++,
+    kind: 'armour',
+    tier: Math.max(1, Math.min(MAX_TIER, tier)),
+    epic: true,
+    name: `${bossName} plate`,
+  };
 }
 
 export function makeTreasure(tier: number): GearItem {

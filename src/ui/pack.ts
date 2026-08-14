@@ -42,6 +42,43 @@ function describe(item: GearItem): string {
   return `worth ${item.value ?? 0}`;
 }
 
+/**
+ * The swap offer.
+ *
+ * One question with both answers on screen, and the stat line for each side
+ * directly under its name. A loot prompt that makes you remember what you were
+ * carrying is a prompt you learn to dismiss without reading.
+ */
+export function drawOffer(
+  batch: SpriteBatch,
+  found: GearItem,
+  current: GearItem | null,
+  yes: boolean,
+): void {
+  for (let y = 0; y < viewport.h; y += 8) {
+    for (let x = 0; x < viewport.w; x += 8) {
+      batch.draw('fx.dim', x, y, { alpha: 0.72 });
+    }
+  }
+  const cx = viewport.w / 2;
+  const top = viewport.h / 2 - 40;
+
+  drawTextCentred(batch, cx, top, found.epic ? 'a trophy' : 'an upgrade', 0.6);
+  drawTextCentred(batch, cx, top + 12, found.name, 1);
+  drawTextCentred(batch, cx, top + 21, describe(found), 0.7);
+
+  drawTextCentred(batch, cx, top + 36, 'replacing', 0.45);
+  drawTextCentred(batch, cx, top + 45, current ? current.name : 'nothing', 0.8);
+  if (current) drawTextCentred(batch, cx, top + 54, describe(current), 0.55);
+
+  // Both answers visible at once: no cursor to hunt for, no memory required.
+  const y = top + 70;
+  drawText(batch, cx - 34, y, 'equip', yes ? 1 : 0.4);
+  drawText(batch, cx + 12, y, 'keep', yes ? 0.4 : 1);
+  drawText(batch, yes ? cx - 42 : cx + 4, y, '>', 0.95);
+  drawTextCentred(batch, cx, y + 14, 'z choose    x keep', 0.55);
+}
+
 export function drawPack(batch: SpriteBatch, view: PackView, frame: number): void {
   for (let y = 0; y < viewport.h; y += 8) {
     for (let x = 0; x < viewport.w; x += 8) {

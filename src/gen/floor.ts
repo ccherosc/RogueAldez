@@ -626,6 +626,25 @@ export function generateFloor(
   // An Act's last floor is guarded: the Colossus stands over the way down, and
   // it does not wander. Every Act ends with the same shape — a huge silhouette
   // between you and the next region.
+  // Every dungeon floor from the first ends with a Warden on the stairs. A floor
+  // that just stops is a floor with no ending; a boss is what turns "I got
+  // through" into "I beat it".
+  if (biome.barsRooms && depth + 1 < act.floors) {
+    // Try posts around the stairs and take the first walkable one. The first
+    // version fell back to a fixed tile without checking it, and the solvability
+    // sweep found the seed where that tile was wall — a boss inside a wall is
+    // unkillable, and the floor unfinishable.
+    const posts: Array<[number, number]> = [
+      [exitTx, exitTy + 3], [exitTx, exitTy + 2],
+      [exitTx + 3, exitTy], [exitTx - 3, exitTy], [exitTx, exitTy - 3],
+    ];
+    for (const [gx, gy] of posts) {
+      if (!world.isWalkable(gx, gy)) continue;
+      enemies.push({ variant: 'warden', x: gx * TILE + TILE / 2, y: gy * TILE + TILE - 1 });
+      break;
+    }
+  }
+
   if (depth + 1 >= act.floors) {
     // First walkable post near the chest wins; a floor with no ground for a
     // 48px guard anywhere around its exit does not get one.

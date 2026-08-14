@@ -84,7 +84,7 @@ export const RELICS: readonly Relic[] = [
     cost: 10,
     effect: 'Every kill yields more amber.',
     memory: 'They hid the old maps behind the walls when the roads began to move.',
-    icon: 'pickup.rupee',
+    icon: 'pickup.shard',
   },
   {
     id: 'ninth-toll',

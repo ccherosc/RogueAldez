@@ -33,6 +33,13 @@ export const ENEMY_STATS: Record<string, EnemyStats> = {
   octorok: { hp: 2, speed: 0.42, contactDamage: 4, halfW: 6, boxH: 11, debris: 'fx.gore' },
   moblin: { hp: 3, speed: 0.58, contactDamage: 4, halfW: 6, boxH: 13, debris: 'fx.gore' },
   keese: { hp: 1, speed: 0.72, contactDamage: 2, halfW: 5, boxH: 10, debris: 'fx.gore' },
+  // The first boss. Tougher than anything else at tier 1 and still beatable
+  // with a rusted sword, because its whole design is a rhythm rather than a
+  // stat: charge, miss, stand open, get hit. Learn that and it dies.
+  warden: {
+    hp: 9, speed: 0.32, contactDamage: 4, halfW: 13, boxH: 26,
+    debris: 'fx.shard', knockScale: 0.15,
+  },
   // The big ones. Scarce by placement, resistant to knockback by mass — a sword
   // hit that shoves a Keese four tiles barely rocks a Hulk on its heels.
   hulk: { hp: 10, speed: 0.35, contactDamage: 6, halfW: 13, boxH: 26, debris: 'fx.gore', knockScale: 0.2 },
@@ -45,6 +52,12 @@ export const ENEMY_STATS: Record<string, EnemyStats> = {
 // pause, and the difficulty table stretches it further still on early tiers.
 export const MOBLIN_TELEGRAPH = 34;
 const MOBLIN_CHARGE_FRAMES = 34;
+
+// The Warden's rhythm, in frames. Generous on purpose: this is where a player
+// learns that a boss telegraph is an invitation.
+const WARDEN_TELEGRAPH = 52;
+const WARDEN_CHARGE = 16;
+const WARDEN_OPEN = 70;
 const MOBLIN_SIGHT = 96;
 
 const OCTOROK_WALK_MIN = 40;
@@ -153,6 +166,7 @@ export class Brains {
         case 'octorok': this.octorok(e, brain, entities, player, isSolid); break;
         case 'moblin': this.moblin(e, brain, player, isSolid); break;
         case 'keese': this.keese(e, brain, player, isSolid); break;
+        case 'warden': this.warden(e, brain, player, isSolid); break;
         case 'hulk':
         case 'colossus': this.brute(e, brain, player, isSolid); break;
       }
@@ -397,6 +411,73 @@ export class Brains {
       this.step(e, (dx / len) * stats.speed, (dy / len) * stats.speed, isSolid);
       e.facing = dirNameFrom(dx, dy);
     }
+  }
+
+  /**
+   * The Warden — the first boss, and a lesson disguised as a fight.
+   *
+   * Four beats, always in the same order and always at the same speed:
+   *
+   *   stalk      slow, straight at the player. Harmless if you keep moving.
+   *   telegraph  plants itself and shudders for nearly a second.
+   *   slam       one committed lunge that cannot be steered.
+   *   open       lands badly and stands there, keyhole lit, taking double.
+   *
+   * Nothing about it is random, which is the point: a first boss should be
+   * beatable the *second* time you see it purely because you now know the
+   * rhythm. The open window is deliberately generous — it is the game teaching
+   * that bosses have tells, and every later boss can then assume the player
+   * learned it here.
+   */
+  private warden(e: Entity, brain: Brain, player: PlayerView, isSolid: SolidQuery): void {
+    const stats = ENEMY_STATS['warden']!;
+    const dx = player.x - e.x;
+    const dy = player.y - e.y;
+    const dist = Math.hypot(dx, dy) || 1;
+
+    switch (brain.state) {
+      case 'telegraph':
+        if (brain.timer >= WARDEN_TELEGRAPH) {
+          brain.state = 'charge';
+          brain.timer = 0;
+          brain.dirX = dx / dist;
+          brain.dirY = dy / dist;
+        }
+        return;
+
+      case 'charge': {
+        const blocked = this.step(
+          e, brain.dirX * stats.speed * 7, brain.dirY * stats.speed * 7, isSolid,
+        );
+        if (blocked || brain.timer >= WARDEN_CHARGE) {
+          brain.state = 'flee'; // reused as the "open" beat
+          brain.timer = 0;
+        }
+        return;
+      }
+
+      case 'flee':
+        // Standing open. It does not move, and Scene doubles damage taken here.
+        if (brain.timer >= WARDEN_OPEN) {
+          brain.state = 'wander';
+          brain.timer = 0;
+        }
+        return;
+
+      default:
+        if (dist < 70 && brain.timer > 24) {
+          brain.state = 'telegraph';
+          brain.timer = 0;
+          return;
+        }
+        this.step(e, (dx / dist) * stats.speed, (dy / dist) * stats.speed, isSolid);
+        e.facing = dirNameFrom(dx, dy);
+    }
+  }
+
+  /** Is this Warden in its open beat? Scene asks, to double damage and swap art. */
+  isOpen(e: Entity): boolean {
+    return e.variant === 'warden' && this.brains.get(e.id)?.state === 'flee';
   }
 
   private keese(e: Entity, brain: Brain, player: PlayerView, isSolid: SolidQuery): void {

@@ -100,6 +100,31 @@ export const sfx = {
   menuMove: (): void => tone(660, 0.05, 0.10, 'square'),
 
   /**
+   * Stairs. A short run of footfalls on stone, pitched down when descending.
+   *
+   * The old descent was a two-note tone that read as a menu confirm. Feet on
+   * steps tell the player they *travelled* rather than teleported, which is most
+   * of what makes a floor change feel like a change of place.
+   */
+  stairs: (down: boolean): void => {
+    const steps = 5;
+    for (let i = 0; i < steps; i++) {
+      const k = down ? i : steps - 1 - i;
+      setTimeout(() => {
+        hit(760 - k * 55, 0.07, 0.13, 2.4);
+        if (i === steps - 1) tone(down ? 174.61 : 261.63, 0.4, 0.15, 'sine', down ? 0.7 : 1.3);
+      }, i * 105);
+    }
+  },
+
+  /** Crossing a threshold into somewhere inhabited — a gate, a town wall. */
+  enterTown: (): void => {
+    tone(392, 0.28, 0.16, 'triangle');
+    setTimeout(() => tone(523.25, 0.28, 0.16, 'triangle'), 120);
+    setTimeout(() => tone(659.25, 0.5, 0.17, 'sine'), 250);
+  },
+
+  /**
    * A blast. Bombs were borrowing the enemy-death sound, which is thin and
    * pitched and reads as "something small popped" — the one moment in the game
    * with real physical force had the least of it.
