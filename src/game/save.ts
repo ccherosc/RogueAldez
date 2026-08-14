@@ -11,7 +11,7 @@
  * here yet a player would mourn.
  */
 
-import { DEFAULT_MODE } from '../chronicle/difficulty.ts';
+import { DEFAULT_MODE, DIFFICULTY_MODES } from '../chronicle/difficulty.ts';
 import type { DifficultyMode } from '../chronicle/difficulty.ts';
 
 const STORAGE_KEY = 'rogue-aldez:save';
@@ -43,6 +43,14 @@ export interface SaveData {
    * Acts themselves.
    */
   actIndex: number;
+  /**
+   * What Amberwake remembers you for.
+   *
+   * Persisted rather than held on the town, because the whole point is that
+   * running away does not clear it: leave with blood on your hands and the
+   * guards are waiting the next time you walk in, this life or a later one.
+   */
+  bounty?: number;
   /** relic ids awakened in the Reliquary; these outlive every rewrite */
   relics: string[];
   /** tutor lessons the player has demonstrated; never taught twice */
@@ -67,6 +75,7 @@ export function emptySave(worldSeed: number): SaveData {
     worldSeed,
     actIndex: 0,
     relics: [],
+    bounty: 0,
     mode: DEFAULT_MODE,
   taught: [],
   met: {},
@@ -104,6 +113,14 @@ export function loadSave(worldSeed: number): SaveData {
       roomsCleared: num(parsed.roomsCleared, base.roomsCleared),
       worldSeed: num(parsed.worldSeed, worldSeed),
       actIndex: num(parsed.actIndex, base.actIndex),
+      // These two are easy to forget, and forgetting is silent: the restore is
+      // an explicit list, so a field added to the interface but not named here
+      // round-trips as its default and the setting simply never persists. That
+      // is exactly what happened to `mode` — difficulty was written to storage
+      // and thrown away on every load.
+      mode: DIFFICULTY_MODES.includes(parsed.mode as DifficultyMode)
+        ? (parsed.mode as DifficultyMode) : DEFAULT_MODE,
+      bounty: num(parsed.bounty, 0),
       relics: Array.isArray(parsed.relics) ? parsed.relics.filter((r) => typeof r === 'string') : [],
     taught: Array.isArray(parsed.taught) ? parsed.taught.filter((r) => typeof r === 'string') : [],
     met: typeof parsed.met === 'object' && parsed.met !== null

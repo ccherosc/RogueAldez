@@ -68,6 +68,18 @@ export function drawText(
   }
 }
 
+/** Right-aligned, for anything anchored to the far edge of the screen. */
+export function drawTextRight(
+  batch: SpriteBatch,
+  rightX: number,
+  y: number,
+  text: string,
+  alpha = 1,
+  scale = UI_SCALE,
+): void {
+  drawText(batch, Math.round(rightX - textWidth(text, scale)), y, text, alpha, scale);
+}
+
 export function drawTextCentred(
   batch: SpriteBatch,
   centreX: number,

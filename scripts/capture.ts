@@ -308,6 +308,50 @@ async function testRooms(browser: Browser): Promise<void> {
   await page.close();
 }
 
+/**
+ * Amberwake is safe until you make it otherwise, and then it remembers.
+ *
+ * Written after the first version charged the player five every time they walked
+ * through the gate: "commit an offence" and "the guards are already hostile" had
+ * been folded into one call, which made the debt unpayable by any means except
+ * not entering. The three transitions below are the whole contract.
+ */
+async function testBounty(browser: Browser): Promise<void> {
+  const page = await openFixture(browser, 'town');
+
+  const r = await page.evaluate(`(() => {
+    const s = window.__aldez.scene;
+    const hostiles = function () {
+      return s.entities.all.filter(function (e) { return e.alive && e.kind === 'enemy'; }).length;
+    };
+    const peace = { bounty: s.save.bounty || 0, hostiles: hostiles() };
+    s.raiseAlarm();
+    const struck = { bounty: s.save.bounty || 0, hostiles: hostiles() };
+    s.leaveTown();
+    const fled = { bounty: s.save.bounty || 0 };
+    s.enterTown('flourishing');
+    const returned = { bounty: s.save.bounty || 0, hostiles: hostiles() };
+    return { peace: peace, struck: struck, fled: fled, returned: returned };
+  })()`) as {
+    peace: { bounty: number; hostiles: number };
+    struck: { bounty: number; hostiles: number };
+    fled: { bounty: number };
+    returned: { bounty: number; hostiles: number };
+  };
+
+  check('town: nobody is hostile until you start it',
+    r.peace.hostiles === 0 && r.peace.bounty === 0, `${r.peace.hostiles} hostile`);
+  check('town: striking a resident turns the guards and costs 5',
+    r.struck.bounty === 5 && r.struck.hostiles > 0,
+    `bounty ${r.struck.bounty}, ${r.struck.hostiles} hostile`);
+  check('town: fleeing does not clear the bounty', r.fled.bounty === 5, `${r.fled.bounty}`);
+  check('town: returning does not charge you again',
+    r.returned.bounty === 5 && r.returned.hostiles > 0,
+    `bounty ${r.returned.bounty}, ${r.returned.hostiles} waiting`);
+  await shot(page, 'bounty');
+  await page.close();
+}
+
 async function testCombat(browser: Browser): Promise<void> {
   const page = await openFixture(browser, 'combat');
   const start = await snap(page);
@@ -726,6 +770,7 @@ async function main(): Promise<void> {
     ['movement', testMovement],
     ['combat', testCombat],
     ['rooms', testRooms],
+    ['bounty', testBounty],
     ['spin', testSpin],
     ['props', testProps],
     ['items', testItems],

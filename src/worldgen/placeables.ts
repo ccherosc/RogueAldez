@@ -165,6 +165,10 @@ export const PLACEABLES: readonly Placeable[] = [
     id: 'keese', kind: 'enemy', key: 'keese', role: 'swarm', weight: 10,
     requires: [], forbids: ['luminous'],
   },
+  {
+    id: 'slime', kind: 'enemy', key: 'slime', role: 'rusher', weight: 6,
+    requires: [], forbids: ['frozen'],
+  },
 ];
 
 /**

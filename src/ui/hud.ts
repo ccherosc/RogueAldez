@@ -8,7 +8,7 @@
 import { viewport } from '../core/const.ts';
 import { HEART_UNITS } from '../player/player.ts';
 import type { SpriteBatch } from '../render/batcher.ts';
-import { drawText, drawTextCentred, UI_SCALE } from './text.ts';
+import { drawText, drawTextCentred, drawTextRight, UI_SCALE } from './text.ts';
 
 const MARGIN = 8;
 const HEART_SPACING = 9;
@@ -28,6 +28,18 @@ export interface HudState {
   levelProgress?: number;
   /** debug: invincibility is on — must be unmissable so it never taints a playtest */
   god?: boolean;
+  /**
+   * What Aldez is thinking, and what he is trying to do.
+   *
+   * `objective` persists — it is the thread through the first half hour, and it
+   * should be readable at any moment without waiting for anything. `thought` is
+   * the passing line, and fades.
+   */
+  objective?: string;
+  thought?: string;
+  thoughtAlpha?: number;
+  /** show the key legend along the bottom */
+  keys?: boolean;
   /** transient centred message, e.g. the room-clear flourish */
   banner?: string;
   /** frames remaining on the banner, used to fade it out */
@@ -99,6 +111,28 @@ export function drawHud(batch: SpriteBatch, state: HudState): void {
     // Deliberately loud. A playtest with god mode silently on is a playtest
     // whose findings are worthless.
     drawTextCentred(batch, viewport.w / 2, MARGIN, 'god mode - i to disable', 0.9);
+  }
+
+  // The objective, top-right under the amber counter. Right-aligned so it never
+  // collides with the region name growing on the left, and always present:
+  // a goal you have to trigger to see is a goal the player forgets they have.
+  if (state.objective) {
+    drawTextRight(batch, viewport.w - MARGIN, MARGIN + 12, state.objective, 0.8);
+  }
+
+  // Aldez's own voice, above the key legend. Low, dim, and out of the play area
+  // — a thought, not a readout.
+  if (state.thought && (state.thoughtAlpha ?? 0) > 0) {
+    drawTextCentred(batch, viewport.w / 2, viewport.h - 22, state.thought,
+      (state.thoughtAlpha ?? 0) * 0.7);
+  }
+
+  // The key legend. Every game that opens with a wall of controls loses the
+  // people who skim it, and every game without one loses the people who forget.
+  // A permanent strip along the very bottom costs one line and answers both.
+  if (state.keys) {
+    drawTextCentred(batch, viewport.w / 2, viewport.h - 10,
+      'z swing   x lift   c item   q cycle   tab pack   esc menu', 0.42);
   }
 
   if (state.banner && (state.bannerFrames ?? 0) > 0) {

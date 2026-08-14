@@ -16,6 +16,7 @@ import {
   ci,
   PAL_DUNGEON,
   PAL_KEESE,
+  PAL_SLIME,
   PAL_MOBLIN,
   PAL_OCTOROK,
   PAL_PICKUP,
@@ -508,6 +509,44 @@ function moblinFrame(dir: Dir, frame: number): PixelBuffer {
   return px;
 }
 
+/**
+ * A slime, mid-hop or settled.
+ *
+ * Two frames that squash and stretch rather than walk: frame 0 is the puddle it
+ * rests as, frame 1 the rounder shape at the top of a hop. Reading the animation
+ * *is* reading the attack, since the hop is the whole of its behaviour — a
+ * player who watches one for three seconds knows everything it can do, which is
+ * exactly what the first enemy in a game should offer.
+ */
+function slimeFrame(frame: number): PixelBuffer {
+  const P = PAL_SLIME;
+  const body = (n: number) => ci(P, `body.${n * 2}`);
+  const px = new PixelBuffer(ENEMY_CELL, ENEMY_CELL);
+
+  // Squat and wide at rest, taller and narrower at the top of the hop.
+  const w = frame === 0 ? 6 : 5;
+  const h = frame === 0 ? 4 : 6;
+  const cy = frame === 0 ? 11 : 9;
+
+  px.ellipse(8, cy, w, h, body(1));          // mass
+  px.ellipse(8, cy, w - 1, h - 1, body(2));  // interior
+  px.ellipse(7, cy - 1, w - 3, h - 3, body(3)); // lit crown, offset up-left
+
+  // A dark seat where it meets the ground, so it sits on the floor rather than
+  // hovering — the same contact logic as the shadow, drawn into the sprite.
+  px.ellipse(8, cy + h - 1, w - 1, 1, body(0));
+
+  // A bright highlight bead: the one thing that says "wet" at this size.
+  // body() tops out at 3 — a 7-step ramp exposes n*2 for n = 0..3.
+  px.set(6, cy - h + 2, body(3));
+  px.set(7, cy - h + 2, body(3));
+
+  px.set(6, cy, ci(P, 'eye.0'));
+  px.set(10, cy, ci(P, 'eye.0'));
+
+  return px;
+}
+
 function keeseFrame(frame: number): PixelBuffer {
   const P = PAL_KEESE;
   const body = (n: number) => ci(P, `body.${n * 2}`);
@@ -786,6 +825,12 @@ export function enemyFrames(): SpriteFrame[] {
     }
   }
   for (let f = 0; f < 2; f++) {
+    out.push({
+      key: `slime.hop.${f}`,
+      buffer: slimeFrame(f),
+      palette: PAL_SLIME,
+      anchor: ENEMY_ANCHOR,
+    });
     out.push({
       key: `keese.fly.${f}`,
       buffer: keeseFrame(f),

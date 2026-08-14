@@ -21,8 +21,9 @@ import { BIOMES, biomesForAct, classify } from '../src/worldgen/biomes.ts';
 import { ClimateMap } from '../src/worldgen/fields.ts';
 import { GAZETTEER } from '../src/worldgen/gazetteer.ts';
 import { placeWorld } from '../src/worldgen/placement.ts';
-import { difficultyFor, tierFor, MODE_SCALES } from '../src/chronicle/difficulty.ts';
+import { difficultyFor, tierFor, MODE_SCALES, DEFAULT_MODE } from '../src/chronicle/difficulty.ts';
 import { bearing, selfTalk, IDLE_LINES } from '../src/chronicle/hints.ts';
+import { beatFor, objectiveLine, beatThought } from '../src/chronicle/thread.ts';
 import type { DifficultyMode } from '../src/chronicle/difficulty.ts';
 import { generateTown } from '../src/gen/town.ts';
 import { TileKind } from '../src/world/tilemap.ts';
@@ -435,6 +436,91 @@ check('same world seed yields an identical climate map', sameClimate);
   check('the waking meadow stays gentle at every Act', worstMeadow <= 4,
     `worst meadow room ${worstMeadow}`);
   check('everything in the meadow dies in one hit', meadowMultiHit === 0);
+}
+
+// ---------------------------------------------------------------------------
+// The first half hour
+// ---------------------------------------------------------------------------
+// The meadow's job is to teach, and it cannot teach while it is busy. These are
+// the promises that make the opening survivable: one kind of enemy, most rooms
+// empty, never more than a pair, and nothing that takes two hits.
+{
+  const meadow = BIOMES.find((b) => b.id === 'meadow')!;
+  const variants = new Set<string>();
+  let occupied = 0;
+  let roomsTotal = 0;
+  let worstRoom = 0;
+  let totalEnemies = 0;
+  const FLOORS = 60;
+
+  for (let act = 0; act < ACTS.length; act++) {
+    for (let i = 0; i < FLOORS / ACTS.length; i++) {
+      const draft = rollDraft(1 + (i % 5), makeRng(0x6200 + i), i % 5);
+      const floor = generateFloor(draft, actAt(act), meadow, makeRng(draft.seed), 0);
+      totalEnemies += floor.enemies.length;
+
+      const per = new Map<string, number>();
+      for (const e of floor.enemies) {
+        variants.add(e.variant);
+        const k = `${Math.floor(e.x / (ROOM_TILES_W * TILE))},${Math.floor(e.y / (ROOM_TILES_H * TILE))}`;
+        per.set(k, (per.get(k) ?? 0) + 1);
+      }
+      for (const n of per.values()) worstRoom = Math.max(worstRoom, n);
+      occupied += per.size;
+      roomsTotal += floor.rooms.size;
+    }
+  }
+
+  check('the meadow holds nothing but slimes',
+    variants.size === 1 && variants.has('slime'), [...variants].join(' '));
+  check('most of the meadow is empty', occupied / roomsTotal < 0.45,
+    `${Math.round((occupied / roomsTotal) * 100)}% of rooms occupied`);
+  check('never more than a pair on one screen', worstRoom <= 2, `worst ${worstRoom}`);
+  check('the whole meadow is a handful of Errata', totalEnemies / FLOORS < 12,
+    `${(totalEnemies / FLOORS).toFixed(1)} per meadow`);
+
+  // A slime is the enemy that teaches the sword, so it has to die to one swing
+  // and it has to be slower than the player at every mode.
+  const slime = ENEMY_STATS['slime']!;
+  check('a slime dies in one hit', slime.hp === 1);
+  check('a slime is slower than Aldez', slime.speed < 1.2, `${slime.speed}`);
+
+  // Easy by default. The people who want the tuned curve go and find it; the
+  // people who bounce off in the first ten minutes never open the menu.
+  check('the game defaults to easy', DEFAULT_MODE === 'easy', DEFAULT_MODE);
+}
+
+// The thread has to name something to do in every state a run can be in, or the
+// corner of the screen goes blank exactly when a lost player looks at it.
+{
+  const STATES = [
+    { visitedTown: false, spokeToAnyone: false, traded: false, depth: 0, bossAlive: false },
+    { visitedTown: true, spokeToAnyone: false, traded: false, depth: 0, bossAlive: false },
+    { visitedTown: true, spokeToAnyone: true, traded: false, depth: 0, bossAlive: false },
+    { visitedTown: true, spokeToAnyone: true, traded: true, depth: 0, bossAlive: false },
+    { visitedTown: true, spokeToAnyone: true, traded: true, depth: 1, bossAlive: false },
+    { visitedTown: false, spokeToAnyone: false, traded: false, depth: 2, bossAlive: true },
+    { visitedTown: false, spokeToAnyone: false, traded: false, depth: 3, bossAlive: false },
+  ];
+  let named = 0;
+  const beats = new Set<string>();
+  for (const st of STATES) {
+    for (const draftsLived of [1, 4]) {
+      const beat = beatFor({ ...st, draftsLived });
+      beats.add(beat);
+      if (objectiveLine(beat).length > 0 && beatThought(beat, draftsLived).length > 0) named++;
+    }
+  }
+  check('every run state has something to do',
+    named === STATES.length * 2, `${beats.size} distinct beats`);
+  // Underground, "find amberwake" is not an instruction, it is a taunt.
+  check('the town is never the goal underground',
+    !['reach-town', 'meet-someone', 'trade'].includes(
+      beatFor({
+        visitedTown: false, spokeToAnyone: false, traded: false,
+        depth: 2, bossAlive: false, draftsLived: 1,
+      }),
+    ));
 }
 
 // ---------------------------------------------------------------------------

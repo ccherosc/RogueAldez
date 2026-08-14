@@ -455,6 +455,28 @@ export function gateBarTiles(room: RoomNode, edges: EdgeMap): Array<[number, num
 /** Path openings are this many tiles wide. Narrower than 3 and doorways snag. */
 const GATE_WIDTH = 4;
 /** Water band thickness along a closed edge. */
+/** How many of the meadow's rooms hold anything at all. */
+const MEADOW_OCCUPIED = 0.34;
+
+/**
+ * Candidate tiles, filtered to walkable ground. Placing on raw coordinates drops
+ * enemies inside ponds and pillars, where they are stuck and unkillable.
+ */
+function walkableSpots(
+  world: World,
+  room: RoomNode,
+  reserved: ReadonlySet<string>,
+): Array<[number, number]> {
+  const spots: Array<[number, number]> = [];
+  for (let ty = room.ry * ROOM_TILES_H + MOAT + 1; ty < (room.ry + 1) * ROOM_TILES_H - MOAT - 1; ty++) {
+    for (let tx = room.rx * ROOM_TILES_W + MOAT + 1; tx < (room.rx + 1) * ROOM_TILES_W - MOAT - 1; tx++) {
+      if (reserved.has(`${tx},${ty}`)) continue;
+      if (world.isWalkable(tx, ty)) spots.push([tx, ty]);
+    }
+  }
+  return spots;
+}
+
 /**
  * Bosses arrive last, on top of a room something else already filled.
  *
@@ -1354,7 +1376,30 @@ function populate(
   // nothing to hit learns nothing and wanders. One weak Erratum in some rooms
   // gives the first minute a verb to practise, and tier 0 caps at a single hit,
   // so it teaches without threatening.
-  if (depth === 0 && (room.kind === 'entrance' || !rng.chance(0.5))) return;
+  // The waking meadow, in full.
+  //
+  // Half the rooms held two to four Errata drawn from the whole roster, which
+  // over twenty rooms is thirty-odd things to fight before the player has found
+  // anything to fight *for*. The complaint it earned — "they overwhelm you fast"
+  // — is really about density rather than difficulty: a screen you can cross is
+  // what makes a place feel like somewhere you are exploring instead of a series
+  // of arenas.
+  //
+  // So: a third of the rooms, one or two slimes in each, and nothing else in the
+  // bestiary. A player should be able to walk the meadow, read the land, and
+  // find the road to Amberwake without a fight they did not choose.
+  if (depth === 0) {
+    if (room.kind === 'entrance' || !rng.chance(MEADOW_OCCUPIED)) return;
+
+    const spots = walkableSpots(world, room, reserved);
+    if (spots.length === 0) return;
+    const n = rng.chance(0.35) ? 2 : 1;
+    for (let i = 0; i < Math.min(n, spots.length); i++) {
+      const [tx, ty] = spots[Math.floor((i + 1) * spots.length / (n + 1))]!;
+      out.push({ variant: 'slime', x: tx * TILE + TILE / 2, y: ty * TILE + TILE - 1 });
+    }
+    return;
+  }
 
   // Ceiling on what one screen may hold, applied after every bonus.
   //
@@ -1374,15 +1419,7 @@ function populate(
     ),
   );
 
-  // Candidate tiles, filtered to walkable ground. Placing on raw coordinates
-  // drops enemies inside ponds and pillars, where they are stuck and unkillable.
-  const spots: Array<[number, number]> = [];
-  for (let ty = room.ry * ROOM_TILES_H + MOAT + 1; ty < (room.ry + 1) * ROOM_TILES_H - MOAT - 1; ty++) {
-    for (let tx = room.rx * ROOM_TILES_W + MOAT + 1; tx < (room.rx + 1) * ROOM_TILES_W - MOAT - 1; tx++) {
-      if (reserved.has(`${tx},${ty}`)) continue;
-      if (world.isWalkable(tx, ty)) spots.push([tx, ty]);
-    }
-  }
+  const spots = walkableSpots(world, room, reserved);
   if (spots.length === 0) return;
 
   // The big ones are scarce on purpose. Rarity is what makes that silhouette

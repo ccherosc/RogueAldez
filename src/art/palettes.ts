@@ -187,6 +187,19 @@ export const PAL_MOBLIN = buildPalette('moblin', {
   eye: ramp(2, { L: 0.93, C: 0.02, H: 60 }, { L: 0.24, C: 0.04, H: 30 }),
 });
 
+/**
+ * The slime: the first thing a player ever swings at.
+ *
+ * Deliberately the friendliest colour in the bestiary — a soft green with a lit
+ * crown and a translucent rim, closer to a jelly than a monster. It has to read
+ * as "hit me to learn what hitting does", not as a threat, because it is the
+ * only Erratum in the waking meadow and the meadow's job is to teach.
+ */
+export const PAL_SLIME = buildPalette('slime', {
+  body: ramp(7, { L: 0.38, C: 0.085, H: 148 }, { L: 0.78, C: 0.125, H: 132 }),
+  eye: ramp(2, { L: 0.20, C: 0.03, H: 268 }, { L: 0.96, C: 0.02, H: 120 }),
+});
+
 export const PAL_KEESE = buildPalette('keese', {
   body: ramp(7, { L: 0.26, C: 0.045, H: 300 }, { L: 0.56, C: 0.075, H: 285 }),
   eye: ramp(2, { L: 0.72, C: 0.185, H: 32 }, { L: 0.95, C: 0.09, H: 60 }),
@@ -223,6 +236,7 @@ export const ALL_PALETTES: readonly Palette[] = [
   PAL_OCTOROK,
   PAL_MOBLIN,
   PAL_KEESE,
+  PAL_SLIME,
   PAL_PICKUP,
   PAL_PROP,
 ];

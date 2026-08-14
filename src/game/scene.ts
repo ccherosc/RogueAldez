@@ -48,6 +48,8 @@ import {
   tierFor, difficultyFor, damageScale, DEFAULT_MODE, DIFFICULTY_MODES,
 } from '../chronicle/difficulty.ts';
 import type { DifficultyMode } from '../chronicle/difficulty.ts';
+import { beatFor, objectiveLine, beatThought } from '../chronicle/thread.ts';
+import type { Beat } from '../chronicle/thread.ts';
 import { selfTalk, IDLE_LINES } from '../chronicle/hints.ts';
 import type { HintTarget } from '../chronicle/hints.ts';
 import { generateFloor, gateBarTiles } from '../gen/floor.ts';
@@ -82,6 +84,9 @@ import type { GearItem } from '../chronicle/gear.ts';
 import type { MenuState, PadStatus } from '../ui/menu.ts';
 import { drawRevision, revisionReadyAt } from '../ui/revision.ts';
 import type { SolidQuery } from '../physics/collide.ts';
+
+/** What Amberwake adds to your name each time you draw on someone in it. */
+const BOUNTY_PER_OFFENCE = 5;
 
 /** How long each region sits behind the title before the next one. */
 const TITLE_CYCLE = 420;
@@ -371,6 +376,12 @@ export class Scene {
    * throw the world away to load a new backdrop. Without this flag, pressing Esc
    * mid-run would eventually destroy the floor being played.
    */
+  /** Thread state: what Aldez has actually done this life. */
+  private visitedTown = false;
+  private spokeToAnyone = false;
+  private traded = false;
+  private lastBeat: Beat | null = null;
+
   private atTitle = true;
   private titleTimer = 0;
 
@@ -554,6 +565,11 @@ export class Scene {
     this.roomX = room.rx;
     this.roomY = room.ry;
     this.camera.snapTo(this.roomX * ROOM_PX_W, this.roomY * ROOM_PX_H);
+    // The thread is per life, like everything else the world forgets.
+    this.visitedTown = false;
+    this.spokeToAnyone = false;
+    this.traded = false;
+    this.lastBeat = null;
     this.clearedRooms.clear();
     this.barredRoom = null;
     this.barIds = [];
@@ -1398,6 +1414,11 @@ export class Scene {
     this.hintLines = [`amberwake, ${CONDITION_PROFILES[condition].label}`,
       CONDITION_PROFILES[condition].mood];
     this.hintFrames = 320;
+    this.visitedTown = true;
+    // Walk back in owing a debt and nobody has to see you do anything: the
+    // guards are already looking. A bounty you can escape by leaving the screen
+    // is not a consequence, it is a cooldown.
+    if ((this.save.bounty ?? 0) > 0) this.raiseAlarm(false);
     sfx.enterTown();
     // The town has its own mood: same mode, a fifth lower, so it reads as the
     // same world at a different hour rather than a different soundtrack.
@@ -1477,6 +1498,7 @@ export class Scene {
         if (item && this.shopSide === 'buy') {
           const cost = priceOf(item.tier, item.epic ?? false);
           if (this.amber >= cost) {
+            this.traded = true;
             this.amber -= cost;
             this.shopStock = this.shopStock.filter((s) => s.uid !== item.uid);
             this.shopCursor = 0;
@@ -1485,6 +1507,7 @@ export class Scene {
           }
           sfx.hitBlocked();
         } else if (item) {
+          this.traded = true;
           this.amber += sellValue(item.tier, item.epic ?? false);
           this.pack.drop(item.uid);
           this.shopCursor = 0;
@@ -1506,6 +1529,32 @@ export class Scene {
    * Only one target speaks at a time — two competing directions is how a hint
    * system stops being a hint system.
    */
+  /** The current beat, and a thought the first time it becomes current. */
+  private get beat(): Beat {
+    return beatFor({
+      visitedTown: this.visitedTown,
+      spokeToAnyone: this.spokeToAnyone,
+      traded: this.traded,
+      depth: this.depth,
+      bossAlive: this.entities.all.some(
+        (e) => e.alive && e.kind === 'enemy'
+          && (e.variant === 'warden' || e.variant === 'colossus'),
+      ),
+      draftsLived: this.save.draftsLived,
+    });
+  }
+
+  private updateThread(): void {
+    const beat = this.beat;
+    if (beat === this.lastBeat) return;
+    this.lastBeat = beat;
+    // The thought explains the objective the corner just changed to. Without it
+    // the goal line looks like it was always there.
+    this.mutter = beatThought(beat, this.save.draftsLived);
+    this.mutterFrames = 220;
+    this.mutterCooldown = 600;
+  }
+
   private speakHint(): void {
     if (this.mode !== 'playing' || this.inTown) return;
 
@@ -1557,6 +1606,8 @@ export class Scene {
     this.town = null;
     this.inTown = false;
     this.nearFolk = null;
+    // No bounty logic here. Leaving is not an offence, and the debt is charged
+    // where it is earned.
     sfx.enterTown();
     music.setMood(this.biome.mode, this.biome.root);
     this.loadDraft(this.draft, this.depth);
@@ -1587,6 +1638,7 @@ export class Scene {
       met,
       roll,
     });
+    this.spokeToAnyone = true;
     this.talkingTo = resident;
     this.mode = 'talk';
 
@@ -1608,12 +1660,29 @@ export class Scene {
    * watched you do it. Guards already placed at the gate turn hostile and hunt,
    * which is cheaper and reads better than spawning reinforcements from nowhere.
    */
-  private raiseAlarm(): void {
+  /**
+   * Turn the guards hostile.
+   *
+   * `charge` separates the two halves that were briefly one thing: committing an
+   * offence adds to the bounty, but *arriving already wanted* must not. Conflated,
+   * the debt grew by five every time the player walked through the gate — so
+   * paying it off became impossible by walking, which is the opposite of what a
+   * bounty is for.
+   */
+  private raiseAlarm(charge = true): void {
     if (!this.town || this.townAlarm > 0) return;
     this.townAlarm = 60 * 45;
+    if (charge) {
+      // Recorded the moment it is incurred, not when you leave, so fleeing
+      // mid-fight cannot outrun it.
+      this.save.bounty = (this.save.bounty ?? 0) + BOUNTY_PER_OFFENCE;
+      this.persist();
+    }
     sfx.bars();
-    this.hintLines = ['the guard has seen you', 'amberwake does not forget quickly'];
-    this.hintFrames = 200;
+    this.hintLines = charge
+      ? ['the guard has seen you', `amberwake does not forget - bounty ${this.save.bounty}`]
+      : ['they were waiting for you', `amberwake wants ${this.save.bounty} for what you did`];
+    this.hintFrames = 220;
 
     for (const e of this.entities.all) {
       if (!e.alive || e.kind !== 'folk') continue;
@@ -1886,6 +1955,7 @@ export class Scene {
       if (this.mutterCooldown > 0) this.mutterCooldown--;
       // A long idle in one place earns a line too: standing still lost is the
       // exact moment a hint is worth most.
+      this.updateThread();
       if (this.mutterCooldown <= 0 && this.mode === 'playing') this.speakHint();
       music.setIntensity(this.musicIntensity());
 
@@ -2662,6 +2732,14 @@ export class Scene {
         // is what makes the world builder legible from inside the game.
         draftLine: `${this.biome.name} - floor ${this.depth + 1} of ${this.act.floors}`,
         subLine: draftSummary(this.draft),
+        objective: objectiveLine(this.beat),
+        thought: this.mutter,
+        // The rebirth couplet is already Aldez thinking out loud, and stacking a
+        // second thought under it put four separate voices on the screen in the
+        // first ten seconds. One at a time: the waking lines have priority, and
+        // the thread's thought waits its turn.
+        thoughtAlpha: this.hintFrames > 0 ? 0 : Math.min(1, this.mutterFrames / 45),
+        keys: true,
         banner: this.actBanner > 0
           ? this.act.name
           : this.clearPulse > 0
@@ -2684,10 +2762,8 @@ export class Scene {
 
       // Aldez's own voice sits low and dim, apart from the HUD. It is a thought,
       // not a readout, and it should never compete with the hearts for the eye.
-      if (this.mutterFrames > 0) {
-        const a = Math.min(1, this.mutterFrames / 45) * 0.62;
-        drawTextCentred(batch, viewport.w / 2, viewport.h - 26, this.mutter, a);
-      }
+      // Aldez's voice is drawn by the HUD now, above the key legend, so the
+      // thought and the keys cannot land on the same row.
 
       // What you just picked up, and whether it went straight on. Loot the
       // player does not notice is loot that did not happen.

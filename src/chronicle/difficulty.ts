@@ -39,7 +39,10 @@
 export const DIFFICULTY_MODES = ['casual', 'easy', 'hard', 'insano'] as const;
 export type DifficultyMode = (typeof DIFFICULTY_MODES)[number];
 
-export const DEFAULT_MODE: DifficultyMode = 'hard';
+// Easy by default. The people who want the tuned curve will go and find it in
+// the menu; the people who bounce off an unfamiliar game in the first ten
+// minutes never see the menu at all.
+export const DEFAULT_MODE: DifficultyMode = 'easy';
 
 export interface ModeScale {
   /** shown in the menu */

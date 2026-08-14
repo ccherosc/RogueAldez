@@ -34,6 +34,10 @@ export interface EnemyStats {
 export const ENEMY_STATS: Record<string, EnemyStats> = {
   octorok: { hp: 2, speed: 0.42, contactDamage: 4, halfW: 6, boxH: 11, debris: 'fx.gore' },
   moblin: { hp: 3, speed: 0.58, contactDamage: 4, halfW: 6, boxH: 13, debris: 'fx.gore' },
+  // The first thing a player ever swings at. One hit, slow, and it announces
+  // every move it makes. Contact damage is half a heart rather than a full one:
+  // being touched by the tutorial should cost something and teach nothing worse.
+  slime: { hp: 1, speed: 0.30, contactDamage: 2, halfW: 6, boxH: 10, debris: 'fx.gore' },
   keese: { hp: 1, speed: 0.72, contactDamage: 2, halfW: 5, boxH: 10, debris: 'fx.gore' },
   // The first boss. Tougher than anything else at tier 1 and still beatable
   // with a rusted sword, because its whole design is a rhythm rather than a
@@ -61,6 +65,12 @@ const WARDEN_TELEGRAPH = 52;
 const WARDEN_CHARGE = 16;
 const WARDEN_OPEN = 70;
 const MOBLIN_SIGHT = 96;
+
+// The slime's whole clock. Long gather, short hop: most of its life is spent
+// sitting still being hittable.
+const SLIME_GATHER = 54;
+const SLIME_HOP = 16;
+const SLIME_SIGHT = 72;
 
 const OCTOROK_WALK_MIN = 40;
 const OCTOROK_WALK_MAX = 100;
@@ -201,6 +211,7 @@ export class Brains {
       switch (e.variant) {
         case 'octorok': this.octorok(e, brain, entities, player, isSolid); break;
         case 'moblin': this.moblin(e, brain, player, isSolid); break;
+        case 'slime': this.slime(e, brain, player, isSolid); break;
         case 'keese': this.keese(e, brain, player, isSolid); break;
         case 'warden': this.warden(e, brain, player, isSolid); break;
         case 'hulk':
@@ -537,6 +548,54 @@ export class Brains {
     return e.variant === 'warden' && this.brains.get(e.id)?.state === 'flee';
   }
 
+  /**
+   * Gather, hop, land, rest — and that is the entire animal.
+   *
+   * It only moves during the hop, so it is never continuously closing on the
+   * player: you can always walk away from a slime, and you can always get a free
+   * swing in while it sits. Both are deliberate. This is the enemy that teaches
+   * the sword, and an enemy that teaches has to be one you are allowed to lose
+   * to slowly.
+   *
+   * It drifts when the player is far away rather than homing from across the
+   * room, so a meadow reads as a place with animals in it rather than a room
+   * that has noticed you.
+   */
+  private slime(e: Entity, brain: Brain, player: PlayerView, isSolid: SolidQuery): void {
+    const dx = player.x - e.x;
+    const dy = player.y - e.y;
+    const dist = Math.hypot(dx, dy);
+    const speed = this.spd('slime');
+
+    if (brain.state === 'wander') {
+      // Gathering itself. Squashed, still, and the moment to hit it.
+      e.animFrame = 0;
+      if (brain.timer >= this.tel(SLIME_GATHER)) {
+        brain.timer = 0;
+        brain.state = 'charge';
+        // Aim at the player only from close by; otherwise pick a lazy direction.
+        if (dist < SLIME_SIGHT && dist > 0.001) {
+          brain.dirX = dx / dist;
+          brain.dirY = dy / dist;
+        } else {
+          const a = this.rng.next() * Math.PI * 2;
+          brain.dirX = Math.cos(a);
+          brain.dirY = Math.sin(a);
+        }
+        e.facing = dirNameFrom(brain.dirX, brain.dirY);
+      }
+      return;
+    }
+
+    // Mid-hop: stretched, committed to the direction it left the ground in.
+    e.animFrame = 1;
+    const blocked = this.step(e, brain.dirX * speed * 3, brain.dirY * speed * 3, isSolid);
+    if (blocked || brain.timer >= SLIME_HOP) {
+      brain.timer = 0;
+      brain.state = 'wander';
+    }
+  }
+
   private keese(e: Entity, brain: Brain, player: PlayerView, isSolid: SolidQuery): void {
     const speed = this.spd('keese');
     const dx = player.x - e.x;
@@ -561,6 +620,7 @@ export class Brains {
   /** Sprite key for the current frame. */
   static spriteKey(e: Entity): string {
     if (e.kind === 'critter') return `${e.variant}.${e.animFrame}`;
+    if (e.variant === 'slime') return `slime.hop.${e.animFrame}`;
     if (e.variant === 'keese') return `keese.fly.${e.animFrame}`;
     // Brutes are symmetric and front-facing; their mass is the message.
     if (e.variant === 'hulk' || e.variant === 'colossus') {
