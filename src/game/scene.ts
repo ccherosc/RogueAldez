@@ -56,6 +56,9 @@ import { drawTextCentred } from '../ui/text.ts';
 import type { LightBuffer } from '../render/lights.ts';
 import { drawMenu, menuLength, BOSS_ITEMS } from '../ui/menu.ts';
 import { Tutor, LESSON_IDS } from '../ui/tutor.ts';
+import { drawPack } from '../ui/pack.ts';
+import { Inventory } from './inventory.ts';
+import { dropTier, makeWeapon, makeArmour, makeTreasure, WEAPON_TYPES } from '../chronicle/gear.ts';
 import type { MenuState, PadStatus } from '../ui/menu.ts';
 import { drawRevision, revisionReadyAt } from '../ui/revision.ts';
 import type { SolidQuery } from '../physics/collide.ts';
@@ -116,7 +119,7 @@ interface Drawable {
   flash?: number;
 }
 
-export type SceneMode = 'playing' | 'revising' | 'reliquary' | 'menu';
+export type SceneMode = 'playing' | 'revising' | 'reliquary' | 'menu' | 'pack';
 
 export class Scene {
   world!: World;
@@ -162,6 +165,14 @@ export class Scene {
   private nudgeY = 0;
   private nudgeFrames = 0;
   readonly loadout = new Loadout();
+  /**
+   * Gear survives death and dies with the window. Relics are bound to Aldez and
+   * live in the save; a sword is something he picked up in a world that no
+   * longer exists, and the Chronicle has no record of it.
+   */
+  readonly pack = new Inventory();
+  private packCursor = 0;
+  private pickupBanner = 0;
   /** contextual teaching; learned flags persist so a veteran is never re-taught */
   readonly tutor: Tutor;
   private movedOnce = false;
@@ -1062,6 +1073,43 @@ export class Scene {
     return this.musicLevel;
   }
 
+  /**
+   * Roll a piece of gear and hand it over.
+   *
+   * `generosity` is the chance anything drops at all. Chests pass 1 — opening a
+   * chest and getting nothing is the single most disappointing thing a game can
+   * do. Ordinary kills pass something small, because loot that falls constantly
+   * stops being loot.
+   */
+  private tryDrop(x: number, y: number, generosity: number): void {
+    const rng = this.rng.stream(`drop:${this.draft.seed}:${this.tick}:${Math.round(x)}`);
+    if (!rng.chance(generosity)) return;
+
+    const tier = dropTier(tierFor(this.act.pressure, this.depth), rng.next());
+    const roll = rng.next();
+    const item = roll < 0.62
+      ? makeWeapon(rng.pick(WEAPON_TYPES), tier)
+      : roll < 0.82
+        ? makeArmour(tier)
+        : makeTreasure(tier);
+
+    const { equipped } = this.pack.add(item);
+    this.pickupBanner = equipped ? 150 : 110;
+    sfx.relic();
+    this.particles.burst(x, y - 8, { key: 'fx.spark', count: 10, speed: 1.4, lift: 1.8 });
+  }
+
+  /**
+   * Contact damage after armour.
+   *
+   * Floored at one so armour can never make a threat harmless — a tier-50 mail
+   * should mean surviving mistakes, not ignoring the game. Halving the incoming
+   * hit is the difference between a long fight and no fight at all.
+   */
+  private afterArmour(damage: number): number {
+    return Math.max(1, damage - this.pack.damageReduction);
+  }
+
   private beginRevision(): void {
     // Instability rises with each Draft: powerful runs create stronger
     // contradictions, which is the in-fiction reason the world gets harder.
@@ -1098,6 +1146,38 @@ export class Scene {
         return;
       }
       if (this.mode === 'menu') this.mode = 'playing';
+    }
+
+    // The pack opens over a paused world. A loot screen that leaves enemies
+    // walking is a loot screen nobody dares open.
+    if (input.packPressed && (this.mode === 'playing' || this.mode === 'pack')) {
+      this.mode = this.mode === 'pack' ? 'playing' : 'pack';
+      this.packCursor = 0;
+      sfx.menuMove();
+      return;
+    }
+
+    if (this.mode === 'pack') {
+      const items = this.pack.all;
+      if (items.length > 0) {
+        if (input.upPressed) {
+          this.packCursor = (this.packCursor + items.length - 1) % items.length;
+          sfx.menuMove();
+        }
+        if (input.downPressed) {
+          this.packCursor = (this.packCursor + 1) % items.length;
+          sfx.menuMove();
+        }
+        if (input.attackPressed) {
+          const item = items[this.packCursor];
+          if (item && item.kind !== 'treasure') {
+            this.pack.equip(item.uid);
+            sfx.pickup();
+          }
+        }
+      }
+      if (input.actionPressed) this.mode = 'playing';
+      return;
     }
 
     if (this.mode === 'menu') {
@@ -1205,6 +1285,7 @@ export class Scene {
       if (this.clearPulse > 0) this.clearPulse--;
       if (this.actBanner > 0) this.actBanner--;
       if (this.hintFrames > 0) this.hintFrames--;
+      if (this.pickupBanner > 0) this.pickupBanner--;
       music.setIntensity(this.musicIntensity());
 
       if (this.player.dead) {
@@ -1474,9 +1555,10 @@ export class Scene {
     for (const circle of sword.hitCircles(px, py, this.player.facing)) {
       for (const e of this.entities.overlapCircle(circle.x, circle.y, circle.r, this.hitScratch)) {
         if (e.kind !== 'prop' && e.kind !== 'enemy') continue;
-        // Armored: the blade clinks off. Once per swing, so it reads as "wrong
-        // tool" rather than as a machine gun of denial sounds.
-        if (e.armored) {
+        // Armored things shrug off a blade — unless the blade is an axe, which
+        // is the whole reason to carry one. The "wrong tool" lesson bombs teach
+        // becomes a reason to keep a second weapon in the pack.
+        if (e.armored && !this.pack.fellsTrees) {
           if (e.lastHitSwing !== sword.swingId) {
             e.lastHitSwing = sword.swingId;
             sfx.hitBlocked();
@@ -1486,7 +1568,10 @@ export class Scene {
         }
         // Knock away from the player, not away from the blade — a blade-relative
         // direction sends things sideways at the arc extremes and looks wrong.
-        const damage = this.effects.swordDamage * (sword.isSpin ? 2 : 1);
+        // Weapon first, relics on top. A tier-50 axe should feel like a tier-50
+        // axe whether or not the Belliron Edge has been awakened.
+        const damage = (this.pack.weaponDamage + this.effects.swordDamage - 1)
+          * (sword.isSpin ? 2 : 1);
         const landed = this.entities.hit(e, sword.swingId, damage, e.x - px, e.y - (py - 9));
         if (landed) this.onHit(e, sword.isSpin);
       }
@@ -1508,6 +1593,10 @@ export class Scene {
       this.amber += this.effects.amberPerKill;
       // Felling something huge pays like it felt: a bigger burst, a real shake,
       // and amber worth the fight.
+      // Ordinary kills rarely pay; the big ones nearly always do. Loot that
+      // falls constantly stops being loot.
+      this.tryDrop(e.x, e.y, e.variant === 'hulk' || e.variant === 'colossus' ? 0.9 : 0.07);
+
       if (e.variant === 'hulk' || e.variant === 'colossus') {
         const big = e.variant === 'colossus';
         this.amber += big ? 9 : 4;
@@ -1553,6 +1642,9 @@ export class Scene {
         kind: 'pickup', spriteKey: 'pickup.heart',
         x: e.x, y: e.y - 16, halfW: 5, boxH: 10, solid: false, breakable: false,
       });
+      // A chest always yields gear. Opening one and getting three rupees is the
+      // most disappointing thing a game can do with a chest.
+      this.tryDrop(e.x, e.y, 1);
       bus.emit('chest:opened', { x: e.x, y: e.y });
       return;
     }
@@ -1633,7 +1725,7 @@ export class Scene {
         continue;
       }
 
-      if (this.player.damage(e.contactDamage, e.x, e.y)) this.onPlayerHurt();
+      if (this.player.damage(this.afterArmour(e.contactDamage), e.x, e.y)) this.onPlayerHurt();
       this.shatterProjectile(e);
     }
   }
@@ -1651,7 +1743,7 @@ export class Scene {
       const dx = Math.abs(e.x - this.player.x);
       const dy = Math.abs(e.y - 5 - (this.player.y - 5));
       if (dx > e.halfW + 5 || dy > e.boxH / 2 + 6) continue;
-      if (this.player.damage(e.contactDamage, e.x, e.y)) {
+      if (this.player.damage(this.afterArmour(e.contactDamage), e.x, e.y)) {
         this.onPlayerHurt();
         return;
       }
@@ -1870,7 +1962,16 @@ export class Scene {
     // UI pass: flat. Text and hearts have no surface for a torch to rake across.
     batch.setNormalMix(0);
     batch.begin(0, 0, viewport.w, viewport.h);
-    if (this.mode === 'menu') {
+    if (this.mode === 'pack') {
+      drawPack(batch, {
+        items: this.pack.all,
+        cursor: this.packCursor,
+        equippedWeapon: this.pack.equippedWeapon,
+        equippedArmour: this.pack.equippedArmour,
+        treasure: this.pack.treasureValue,
+        amber: this.amber,
+      }, this.tick);
+    } else if (this.mode === 'menu') {
       drawMenu(batch, this.menu, this.tick, this.padStatus);
     } else if (this.mode === 'reliquary') {
       drawReliquary(batch, {
@@ -1910,6 +2011,19 @@ export class Scene {
           ? this.actBanner
           : this.clearPulse > 0 ? this.clearPulse : this.barredRoom ? 40 : 0,
       });
+
+      // What you just picked up, and whether it went straight on. Loot the
+      // player does not notice is loot that did not happen.
+      if (this.pickupBanner > 0 && this.pack.lastPickup) {
+        const item = this.pack.lastPickup;
+        const alpha = Math.min(1, this.pickupBanner / 30) * 0.95;
+        const equipped = item.uid === this.pack.equippedWeapon?.uid
+          || item.uid === this.pack.equippedArmour?.uid;
+        drawTextCentred(batch, viewport.w / 2, 62, `found  ${item.name}`, alpha);
+        if (equipped) {
+          drawTextCentred(batch, viewport.w / 2, 71, 'equipped', alpha * 0.7);
+        }
+      }
 
       // Teaching sits above the waking words and below the action, and never
       // covers the player: it fades in, fades out, and blocks nothing.

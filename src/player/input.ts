@@ -32,6 +32,8 @@ export interface InputSnapshot {
   invinciblePressed: boolean;
   /** open or close the menu */
   menuPressed: boolean;
+  /** open or close the pack */
+  packPressed: boolean;
 }
 
 /** Logical actions a key can map to. Not all of them expose a held state. */
@@ -45,7 +47,7 @@ const BINDINGS: Record<string, Action> = {
   KeyZ: 'attack', KeyJ: 'attack', Space: 'attack',
   KeyX: 'action', KeyK: 'action', KeyE: 'action',
   KeyC: 'item', KeyL: 'item', ShiftLeft: 'item',
-  KeyQ: 'cycle', Tab: 'cycle',
+  KeyQ: 'cycle',
 };
 
 export interface Input {
@@ -68,10 +70,14 @@ export function createInput(target: Window = window): Input {
   let fullscreenLatched = false;
   let invinciblePressed = false;
   let menuLatched = false;
+  let packLatched = false;
 
   const onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat) return;
-    if (BINDINGS[e.code] || e.code === 'F1' || e.code === 'F2') e.preventDefault();
+    // Tab would otherwise move focus out of the canvas.
+    if (BINDINGS[e.code] || e.code === 'F1' || e.code === 'F2' || e.code === 'Tab') {
+      e.preventDefault();
+    }
 
     held.add(e.code);
     anyLatched = true;
@@ -86,6 +92,7 @@ export function createInput(target: Window = window): Input {
     if (e.code === 'F3' || e.code === 'KeyF') fullscreenLatched = true;
     if (e.code === 'F4' || e.code === 'KeyI') invinciblePressed = true;
     if (e.code === 'Escape') menuLatched = true;
+    if (e.code === 'Tab') packLatched = true;
   };
   const onKeyUp = (e: KeyboardEvent): void => { held.delete(e.code); };
   // Losing focus mid-key would otherwise leave the player walking forever.
@@ -121,10 +128,12 @@ export function createInput(target: Window = window): Input {
         fullscreenPressed: fullscreenLatched,
         invinciblePressed,
         menuPressed: menuLatched,
+        packPressed: packLatched,
       };
       fullscreenLatched = false;
       invinciblePressed = false;
       menuLatched = false;
+      packLatched = false;
       attackLatched = false;
       actionLatched = false;
       upLatched = false;

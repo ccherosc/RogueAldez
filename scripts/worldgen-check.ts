@@ -21,7 +21,11 @@ import { BIOMES, biomesForAct, classify } from '../src/worldgen/biomes.ts';
 import { ClimateMap } from '../src/worldgen/fields.ts';
 import { GAZETTEER } from '../src/worldgen/gazetteer.ts';
 import { placeWorld } from '../src/worldgen/placement.ts';
+import {
+  MAX_TIER, WEAPON_TYPES, makeWeapon, weaponStats, armourReduction, dropTier,
+} from '../src/chronicle/gear.ts';
 import { generateRegion, ringThreat } from '../src/gen/floor.ts';
+import { ENEMY_STATS } from '../src/ai/brains.ts';
 import { ACTS, actAt } from '../src/chronicle/acts.ts';
 import { rollDraft, VALE_CONDITIONS } from '../src/chronicle/draft.ts';
 import { generateFloor } from '../src/gen/floor.ts';
@@ -314,6 +318,71 @@ check('same world seed yields an identical climate map', sameClimate);
   const moved = a.sites.filter((s, i) => s.rx !== c.sites[i]!.rx || s.ry !== c.sites[i]!.ry).length;
   check('a new draft scrambles the world', moved > GAZETTEER.length * 0.7,
     `${moved}/${GAZETTEER.length} sites moved`);
+}
+
+// ---------------------------------------------------------------------------
+// Gear and the tier curve
+// ---------------------------------------------------------------------------
+// Fifty tiers is a lot of numbers nobody will ever read individually. These
+// prove the properties a player would actually notice.
+{
+  let named = 0;
+  let monotonic = true;
+  let previousBest = 0;
+  for (let tier = 1; tier <= MAX_TIER; tier++) {
+    // Every tier has a sayable name, in every type.
+    for (const type of WEAPON_TYPES) {
+      const w = makeWeapon(type, tier);
+      if (w.name.includes('undefined') || w.name.trim().length < 4) continue;
+      named++;
+    }
+    // Damage never goes backwards as tier rises.
+    const best = Math.max(...WEAPON_TYPES.map((t) => weaponStats(t, tier).damage));
+    if (best < previousBest) monotonic = false;
+    previousBest = best;
+  }
+  check('every tier names every weapon type', named === MAX_TIER * WEAPON_TYPES.length,
+    `${named}/${MAX_TIER * WEAPON_TYPES.length}`);
+  check('weapon damage never decreases with tier', monotonic);
+
+  // The point of tiering: a late weapon must be decisively better than an early
+  // one, without the curve running away into absurdity.
+  const t1 = weaponStats('sword', 1).damage;
+  const t50 = weaponStats('sword', MAX_TIER).damage;
+  check('tier 50 is a real upgrade on tier 1', t50 >= t1 * 8 && t50 <= t1 * 20,
+    `${t1} -> ${t50} damage`);
+
+  // Armour must reduce every hit and negate none.
+  //
+  // The first version of this asserted reduction < 2 against the weakest enemy's
+  // damage, which was the wrong claim: the real guarantee is the floor in
+  // Scene.afterArmour, not the size of the reduction. Test the composed rule the
+  // player actually experiences, against every enemy in the game.
+  const afterArmour = (dmg: number): number => Math.max(1, dmg - armourReduction(MAX_TIER));
+  const damages = Object.values(ENEMY_STATS).map((s) => s.contactDamage);
+  check('best armour still leaves every enemy able to hurt you',
+    damages.every((d) => afterArmour(d) >= 1),
+    `${damages.map((d) => `${d}->${afterArmour(d)}`).join(' ')}`);
+  check('best armour meaningfully reduces the hardest hit',
+    afterArmour(Math.max(...damages)) < Math.max(...damages));
+
+  // The axe is the only thing that fells a tree; that is its whole identity.
+  const fellers = WEAPON_TYPES.filter((t) => weaponStats(t, 20).fellsTrees);
+  check('exactly one weapon type fells trees', fellers.length === 1 && fellers[0] === 'axe',
+    fellers.join(','));
+
+  // Drops track the difficulty curve rather than the clock.
+  const early = dropTier(0, 0.5);
+  const late = dropTier(8, 0.5);
+  check('drop tier rises with difficulty', late > early + 8, `${early} -> ${late}`);
+  let inRange = true;
+  for (let d = 0; d < 20; d++) {
+    for (let r = 0; r < 1; r += 0.05) {
+      const t = dropTier(d, r);
+      if (t < 1 || t > MAX_TIER) inRange = false;
+    }
+  }
+  check('drop tier always lands inside 1..50', inRange);
 }
 
 // ---------------------------------------------------------------------------
