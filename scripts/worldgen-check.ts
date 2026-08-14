@@ -21,7 +21,8 @@ import { BIOMES, biomesForAct, classify } from '../src/worldgen/biomes.ts';
 import { ClimateMap } from '../src/worldgen/fields.ts';
 import { GAZETTEER } from '../src/worldgen/gazetteer.ts';
 import { placeWorld } from '../src/worldgen/placement.ts';
-import { difficultyFor, MODE_SCALES } from '../src/chronicle/difficulty.ts';
+import { difficultyFor, tierFor, MODE_SCALES } from '../src/chronicle/difficulty.ts';
+import { bearing, selfTalk, IDLE_LINES } from '../src/chronicle/hints.ts';
 import type { DifficultyMode } from '../src/chronicle/difficulty.ts';
 import { generateTown } from '../src/gen/town.ts';
 import { TileKind } from '../src/world/tilemap.ts';
@@ -50,7 +51,9 @@ import {
   MAX_LEVEL, xpForLevel, levelForXp, levelProgress, bonusHearts,
   merchantTierFor, priceOf, sellValue,
 } from '../src/chronicle/level.ts';
-import { generateRegion, ringThreat } from '../src/gen/floor.ts';
+import { generateRegion, ringThreat, MAX_PER_ROOM } from '../src/gen/floor.ts';
+import { ROOM_TILES_W, ROOM_TILES_H } from '../src/core/const.ts';
+import { TILE } from '../src/art/tiles.ts';
 import { ENEMY_STATS } from '../src/ai/brains.ts';
 import { ACTS, actAt } from '../src/chronicle/acts.ts';
 import { rollDraft, VALE_CONDITIONS } from '../src/chronicle/draft.ts';
@@ -384,6 +387,96 @@ check('same world seed yields an identical climate map', sameClimate);
   }
   check('every roof is one material', speckled === 0 && roofsSeen > 0,
     `${roofsSeen} roofs, ${speckled} speckled`);
+}
+
+// ---------------------------------------------------------------------------
+// How full a screen is allowed to be
+// ---------------------------------------------------------------------------
+// Both of these were real: Act pressure lifted the waking meadow along with
+// everything else, so a player returning with four Acts unlocked woke into a hub
+// holding nine Errata per screen; and a big Erratum was added on top of an
+// already-full room. Neither is visible in a table — you have to count what
+// actually lands in a room.
+{
+  const roomOf = (e: { x: number; y: number }): string =>
+    `${Math.floor(e.x / (ROOM_TILES_W * TILE))},${Math.floor(e.y / (ROOM_TILES_H * TILE))}`;
+
+  let worstAnywhere = 0;
+  let worstMeadow = 0;
+  let meadowMultiHit = 0;
+
+  for (let act = 0; act < ACTS.length; act++) {
+    for (const depth of [0, 1, 2, 4]) {
+      for (let i = 0; i < 25; i++) {
+        const draft = rollDraft(1 + (i % 5), makeRng(0x5100 + i), i % 5);
+        const biome = depth === 0
+          ? BIOMES.find((b) => b.id === 'meadow')!
+          : BIOMES[i % BIOMES.length]!;
+        const floor = generateFloor(draft, actAt(act), biome, makeRng(draft.seed), depth);
+
+        const per = new Map<string, number>();
+        for (const e of floor.enemies) per.set(roomOf(e), (per.get(roomOf(e)) ?? 0) + 1);
+        for (const n of per.values()) {
+          worstAnywhere = Math.max(worstAnywhere, n);
+          if (depth === 0) worstMeadow = Math.max(worstMeadow, n);
+        }
+        // The meadow's other promise: whatever is standing there dies in one hit,
+        // at every Act, forever. It is the constant the strangeness is measured
+        // against, and it cannot be the constant and also scale.
+        if (depth === 0 && difficultyFor(tierFor(actAt(act).pressure, 0)).maxHp > 1) {
+          meadowMultiHit++;
+        }
+      }
+    }
+  }
+
+  check('no screen holds more than the cap', worstAnywhere <= MAX_PER_ROOM,
+    `worst room ${worstAnywhere} of ${MAX_PER_ROOM}`);
+  check('the waking meadow stays gentle at every Act', worstMeadow <= 4,
+    `worst meadow room ${worstMeadow}`);
+  check('everything in the meadow dies in one hit', meadowMultiHit === 0);
+}
+
+// ---------------------------------------------------------------------------
+// Aldez's own voice
+// ---------------------------------------------------------------------------
+// A hint that points the wrong way is worse than silence: the player trusts it
+// once and then stops trusting all of them. So the bearing is checked against
+// the vector it came from rather than eyeballed in play.
+{
+  const CARDINAL: Array<[number, number, string]> = [
+    [1, 0, 'east'], [-1, 0, 'west'], [0, 1, 'south'], [0, -1, 'north'],
+    [1, 1, 'south-east'], [-1, 1, 'south-west'],
+    [1, -1, 'north-east'], [-1, -1, 'north-west'],
+  ];
+  check('every bearing names the direction it was given',
+    CARDINAL.every(([dx, dy, want]) => bearing(dx * 100, dy * 100) === want),
+    CARDINAL.map(([dx, dy]) => bearing(dx * 100, dy * 100)).join(' '));
+
+  // A hint is spoken about somewhere the player is *not*, so the degenerate
+  // vector has to resolve to something rather than to NaN or 'east'.
+  check('a zero bearing is not a direction', bearing(0, 0) === 'here');
+
+  // Substitution has to be total: a line reaching the screen with a literal
+  // {dir} in it is the most visible possible failure.
+  const rng = makeRng(0x4127);
+  let unsubstituted = 0;
+  let spoken = 0;
+  for (const target of ['town', 'descent', 'boss', 'relic'] as const) {
+    for (let i = 0; i < 400; i++) {
+      const line = selfTalk(target, (i % 7) - 3, (i % 5) - 2, i % 4, rng);
+      spoken++;
+      if (line.includes('{')) unsubstituted++;
+    }
+  }
+  check('no hint reaches the screen with a placeholder in it',
+    unsubstituted === 0, `${spoken} lines`);
+
+  // The idle pool is the one that must never claim a direction, because there is
+  // no target behind it to be right about.
+  const DIRS = ['north', 'south', 'east', 'west'];
+  check('idle lines never invent a direction',
+    IDLE_LINES.every((l) => !DIRS.some((d) => l.includes(d))));
 }
 
 // ---------------------------------------------------------------------------

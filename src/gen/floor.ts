@@ -455,6 +455,41 @@ export function gateBarTiles(room: RoomNode, edges: EdgeMap): Array<[number, num
 /** Path openings are this many tiles wide. Narrower than 3 and doorways snag. */
 const GATE_WIDTH = 4;
 /** Water band thickness along a closed edge. */
+/**
+ * Bosses arrive last, on top of a room something else already filled.
+ *
+ * A Warden is a fight with four readable beats and a window to punish, and none
+ * of that survives six Errata throwing themselves at you during the telegraph.
+ * The boss room keeps at most two others, so the fight is legible as a fight.
+ */
+const BOSS_ESCORT = 2;
+const BOSSES = new Set(['warden', 'colossus']);
+
+function clearTheBossRoom(enemies: EnemySpawn[]): void {
+  const roomOf = (e: EnemySpawn): string =>
+    `${Math.floor(e.x / (ROOM_TILES_W * TILE))},${Math.floor(e.y / (ROOM_TILES_H * TILE))}`;
+
+  const bossRooms = new Set(enemies.filter((e) => BOSSES.has(e.variant)).map(roomOf));
+  if (bossRooms.size === 0) return;
+
+  const kept = new Map<string, number>();
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i]!;
+    if (BOSSES.has(e.variant)) continue;
+    const room = roomOf(e);
+    if (!bossRooms.has(room)) continue;
+    const n = kept.get(room) ?? 0;
+    if (n >= BOSS_ESCORT) enemies.splice(i, 1);
+    else kept.set(room, n + 1);
+  }
+}
+
+/**
+ * Most a single screen may hold. Two to four is the readable band; five or six
+ * should be the room you remember, not the room you expect.
+ */
+export const MAX_PER_ROOM = 6;
+
 const MOAT = 2;
 
 const GROUND_TILE: Record<Biome['ground'], TileKind> = {
@@ -659,6 +694,8 @@ export function generateFloor(
       break;
     }
   }
+
+  clearTheBossRoom(enemies);
 
   // Decoration can undo what sealUnreachable guaranteed: a tight cluster of
   // solid trees can fence off ground that the terrain pass left open. Prune the
@@ -1319,12 +1356,22 @@ function populate(
   // so it teaches without threatening.
   if (depth === 0 && (room.kind === 'entrance' || !rng.chance(0.5))) return;
 
-  const count = Math.max(
-    1,
-    diff.count
-      + (room.kind === 'treasure' ? 1 : 0)
-      + Math.min(2, Math.floor(draft.instability / 3))
-      + rng.int(0, 1),
+  // Ceiling on what one screen may hold, applied after every bonus.
+  //
+  // The pieces are all individually defensible — a treasure room earns a guard,
+  // an unstable Draft earns pressure, jitter keeps rooms from feeling stamped —
+  // and they stack. Nine on a screen is not a hard fight, it is a screen you
+  // cannot read, and the player has to fight their way across every room of the
+  // floor to learn anything about it.
+  const count = Math.min(
+    MAX_PER_ROOM,
+    Math.max(
+      1,
+      diff.count
+        + (room.kind === 'treasure' ? 1 : 0)
+        + Math.min(2, Math.floor(draft.instability / 3))
+        + rng.int(0, 1),
+    ),
   );
 
   // Candidate tiles, filtered to walkable ground. Placing on raw coordinates
@@ -1337,14 +1384,22 @@ function populate(
     }
   }
   if (spots.length === 0) return;
-  composeEncounter(spots, room, count, tags, rng, out);
 
   // The big ones are scarce on purpose. Rarity is what makes that silhouette
   // mean something when it finally fills a doorway — and the curve now decides,
   // so they cannot turn up in the first dungeon by accident.
-  if (diff.bigChance > 0 && room.kind === 'combat'
-      && rng.chance(diff.bigChance) && spots.length > count + 4) {
-    const [tx, ty] = spots[count + 1]!;
+  //
+  // Decided *before* the room is filled, and it costs two of the regulars. A
+  // hulk used to be added on top of a full room, which is how a screen capped at
+  // six ended up holding seven with the largest thing in the game among them.
+  const big = diff.bigChance > 0 && room.kind === 'combat'
+    && rng.chance(diff.bigChance) && spots.length > count + 4;
+  const regulars = big ? Math.max(1, count - 2) : count;
+
+  composeEncounter(spots, room, regulars, tags, rng, out);
+
+  if (big) {
+    const [tx, ty] = spots[regulars + 1]!;
     out.push({ variant: 'hulk', x: tx * TILE + TILE / 2, y: ty * TILE + TILE - 1 });
   }
 }

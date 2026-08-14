@@ -98,10 +98,19 @@ export interface Difficulty {
 }
 
 /**
- * Act pressure plus floor depth. Depth 0 is the waking place and always the
- * gentlest thing in the game.
+ * Act pressure plus floor depth.
+ *
+ * Depth 0 returns tier 0 unconditionally, whatever the Act. This docstring has
+ * claimed the waking place is "always the gentlest thing in the game" since it
+ * was written, and the formula quietly disagreed: Act pressure lifted the hub
+ * along with everything else, so a player who had unlocked four Acts woke into
+ * a meadow holding six to nine Errata per screen and no way to have earned it.
+ *
+ * The meadow is the constant the strangeness is measured against. It cannot be
+ * the constant and also scale.
  */
 export function tierFor(actPressure: number, depth: number): number {
+  if (depth === 0) return 0;
   return actPressure * 2 + depth;
 }
 

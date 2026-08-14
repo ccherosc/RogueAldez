@@ -48,6 +48,8 @@ import {
   tierFor, difficultyFor, damageScale, DEFAULT_MODE, DIFFICULTY_MODES,
 } from '../chronicle/difficulty.ts';
 import type { DifficultyMode } from '../chronicle/difficulty.ts';
+import { selfTalk, IDLE_LINES } from '../chronicle/hints.ts';
+import type { HintTarget } from '../chronicle/hints.ts';
 import { generateFloor, gateBarTiles } from '../gen/floor.ts';
 import type { GeneratedFloor } from '../gen/floor.ts';
 import { loadSave, writeSave, emptySave } from './save.ts';
@@ -222,6 +224,15 @@ export class Scene {
   /** A one-line confirmation that a setting took, and what it changed. */
   private notice = '';
   private noticeFrames = 0;
+  /**
+   * Aldez's own voice: a line on arriving somewhere new, then a long cooldown.
+   * Named apart from the rebirth `hint*` fields above, which are a different
+   * thing that happens once per waking.
+   */
+  private mutter = '';
+  private mutterFrames = 0;
+  private mutterCooldown = 0;
+  private roomsVisited = new Set<string>();
   private inTown = false;
   /** the road marker in the meadow that leads to Amberwake */
   private townGate: Entity | null = null;
@@ -1412,6 +1423,60 @@ export class Scene {
     }
   }
 
+  /**
+   * Say the one thing worth saying about where to go.
+   *
+   * Priority is what the player most needs next, not what is nearest: in the
+   * meadow that is the road to Amberwake, and inside a floor it is the way down.
+   * Only one target speaks at a time — two competing directions is how a hint
+   * system stops being a hint system.
+   */
+  private speakHint(): void {
+    if (this.mode !== 'playing' || this.inTown) return;
+
+    let target: HintTarget | null = null;
+    let tx = 0;
+    let ty = 0;
+
+    if (this.townGate?.alive) {
+      target = 'town';
+      tx = this.townGate.x;
+      ty = this.townGate.y;
+    } else if (this.floor.exit) {
+      // A boss stands on the stairs, so on those floors the way down and the
+      // thing guarding it are the same direction and it should say so.
+      const guarded = this.entities.all.some(
+        (e) => e.alive && e.kind === 'enemy'
+          && (e.variant === 'warden' || e.variant === 'colossus'),
+      );
+      target = guarded ? 'boss' : 'descent';
+      tx = this.floor.exit.x;
+      ty = this.floor.exit.y;
+    }
+
+    const rng = this.rng.stream(`hint:${this.draft.seed}:${this.tick}`);
+
+    if (target === null) {
+      this.mutter = rng.pick(IDLE_LINES);
+    } else {
+      const dx = tx - this.player.x;
+      const dy = ty - this.player.y;
+      // Standing on the thing and being told where it is reads as broken — but
+      // the radius has to be *arm's length*, not half a room. At half a room the
+      // player spawns inside the suppression zone of the very gate the hint
+      // exists to point at, and Aldez never says anything at all.
+      if (Math.hypot(dx, dy) < TILE * 3) {
+        this.mutterCooldown = 240;
+        return;
+      }
+      const rooms = Math.round(Math.hypot(dx / ROOM_PX_W, dy / ROOM_PX_H));
+      this.mutter = selfTalk(target, dx, dy, rooms, rng);
+    }
+
+    this.mutterFrames = 200;
+    this.mutterCooldown = 900;  // 15s, so it never nags
+  }
+
   /** Back out of the gate and into the meadow you came from. */
   leaveTown(): void {
     this.town = null;
@@ -1732,6 +1797,11 @@ export class Scene {
       if (this.pickupBanner > 0) this.pickupBanner--;
       if (this.levelBanner > 0) this.levelBanner--;
       if (this.noticeFrames > 0) this.noticeFrames--;
+      if (this.mutterFrames > 0) this.mutterFrames--;
+      if (this.mutterCooldown > 0) this.mutterCooldown--;
+      // A long idle in one place earns a line too: standing still lost is the
+      // exact moment a hint is worth most.
+      if (this.mutterCooldown <= 0 && this.mode === 'playing') this.speakHint();
       music.setIntensity(this.musicIntensity());
 
       if (this.player.dead) {
@@ -2245,6 +2315,15 @@ export class Scene {
     this.roomX = rx;
     this.roomY = ry;
 
+    // Speak on arriving somewhere new, not on every doorway. Backtracking
+    // through a cleared room to hear the same line again is how a voice turns
+    // into a notification.
+    const key = `${rx},${ry}`;
+    if (!this.roomsVisited.has(key)) {
+      this.roomsVisited.add(key);
+      this.speakHint();
+    }
+
     // A swing must not survive into the next room — the hitbox would sweep
     // through entities the player never saw.
     this.player.sword.interrupt();
@@ -2506,6 +2585,13 @@ export class Scene {
       if (this.noticeFrames > 0) {
         const a = Math.min(1, this.noticeFrames / 30) * 0.9;
         drawTextCentred(batch, viewport.w / 2, 60, this.notice, a);
+      }
+
+      // Aldez's own voice sits low and dim, apart from the HUD. It is a thought,
+      // not a readout, and it should never compete with the hearts for the eye.
+      if (this.mutterFrames > 0) {
+        const a = Math.min(1, this.mutterFrames / 45) * 0.62;
+        drawTextCentred(batch, viewport.w / 2, viewport.h - 26, this.mutter, a);
       }
 
       // What you just picked up, and whether it went straight on. Loot the
