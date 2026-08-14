@@ -52,7 +52,9 @@ import {
   MAX_LEVEL, xpForLevel, levelForXp, levelProgress, bonusHearts,
   merchantTierFor, priceOf, sellValue,
 } from '../src/chronicle/level.ts';
-import { generateRegion, ringThreat, MAX_PER_ROOM } from '../src/gen/floor.ts';
+import {
+  generateRegion, ringThreat, MAX_PER_ROOM, farthestReachable,
+} from '../src/gen/floor.ts';
 import { ROOM_TILES_W, ROOM_TILES_H } from '../src/core/const.ts';
 import { TILE } from '../src/art/tiles.ts';
 import { ENEMY_STATS } from '../src/ai/brains.ts';
@@ -436,6 +438,78 @@ check('same world seed yields an identical climate map', sameClimate);
   check('the waking meadow stays gentle at every Act', worstMeadow <= 4,
     `worst meadow room ${worstMeadow}`);
   check('everything in the meadow dies in one hit', meadowMultiHit === 0);
+}
+
+// ---------------------------------------------------------------------------
+// The road to Amberwake
+// ---------------------------------------------------------------------------
+// The gate is chosen at the far edge of the meadow, which is the whole point —
+// reaching it should mean crossing the region. It is also the exact shape of
+// mistake that only shows up on the seed where that edge is behind a lake: the
+// player walks the length of the world to a marker they can never step on, and
+// nothing about it looks broken.
+{
+  const meadow = BIOMES.find((b) => b.id === 'meadow')!;
+  let unreachable = 0;
+  let tooClose = 0;
+  let checked = 0;
+  const dirs: Array<[number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+  for (let i = 0; i < 120; i++) {
+    const draft = rollDraft(1 + (i % 5), makeRng(0x7700 + i), i % 5);
+    const floor = generateFloor(draft, actAt(i % ACTS.length), meadow, makeRng(draft.seed), 0);
+    // Mirror of the scene's choice: measure all four, keep the ones that are a
+    // real journey, take one. Written out rather than imported because the point
+    // is to check the *rule*, not that a function equals itself.
+    const sxT = Math.floor(floor.spawn.x / TILE);
+    const syT = Math.floor(floor.spawn.y / TILE);
+    const options = dirs.map(([dx, dy]) => {
+      const [x, y] = farthestReachable(floor.world, floor.spawn, dx, dy);
+      return { x, y, away: Math.hypot(x - sxT, y - syT) };
+    });
+    const worthy = options.filter((o) => o.away >= ROOM_TILES_W);
+    const chosen = worthy.length > 0
+      ? worthy[i % worthy.length]!
+      : options.reduce((a, b) => (b.away > a.away ? b : a));
+    const gx = chosen.x;
+    const gy = chosen.y;
+    checked++;
+
+    // Re-derive reachability independently rather than trusting the function
+    // that chose the tile: a flood fill checked against itself proves nothing.
+    const w = floor.world.tilesW;
+    const h = floor.world.tilesH;
+    const seen = new Uint8Array(w * h);
+    const sx = Math.floor(floor.spawn.x / TILE);
+    const sy = Math.floor(floor.spawn.y / TILE);
+    const q = [sy * w + sx];
+    seen[sy * w + sx] = 1;
+    for (let head = 0; head < q.length; head++) {
+      const idx = q[head]!;
+      const x = idx % w;
+      const y = (idx - x) / w;
+      for (const [ox, oy] of dirs) {
+        const nx = x + ox;
+        const ny = y + oy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const ni = ny * w + nx;
+        if (seen[ni] || !floor.world.isWalkable(nx, ny)) continue;
+        seen[ni] = 1;
+        q.push(ni);
+      }
+    }
+    if (!seen[gy * w + gx]) unreachable++;
+
+    // And it has to be a journey. A gate two tiles from the waking place is not
+    // a destination, it is furniture.
+    const away = Math.hypot(gx - sx, gy - sy);
+    if (away < ROOM_TILES_W) tooClose++;
+  }
+
+  check('the town gate is always reachable on foot', unreachable === 0,
+    `${unreachable} of ${checked} stranded`);
+  check('the town gate is always a journey away', tooClose === 0,
+    `${tooClose} of ${checked} within a screen`);
 }
 
 // ---------------------------------------------------------------------------

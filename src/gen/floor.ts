@@ -455,6 +455,110 @@ export function gateBarTiles(room: RoomNode, edges: EdgeMap): Array<[number, num
 /** Path openings are this many tiles wide. Narrower than 3 and doorways snag. */
 const GATE_WIDTH = 4;
 /** Water band thickness along a closed edge. */
+/**
+ * The reachable tile that lies furthest in a given direction.
+ *
+ * "Walkable" and "reachable" are not the same claim, and picking the gate by
+ * walkability alone was a bug waiting for the seed where the far edge of the
+ * meadow sits behind a lake. The player would have crossed the whole region on a
+ * road to a marker they could never step on — the worst possible version of
+ * "find the town", because everything about it looks like it is working.
+ *
+ * A flood fill from the waking place answers the real question, and taking the
+ * extreme of that set puts the gate as far away as the region allows while
+ * keeping it somewhere a person can actually walk.
+ */
+export function farthestReachable(
+  world: World,
+  from: { x: number; y: number },
+  dx: number,
+  dy: number,
+): [number, number] {
+  const w = world.tilesW;
+  const h = world.tilesH;
+  const sx = Math.floor(from.x / TILE);
+  const sy = Math.floor(from.y / TILE);
+
+  const seen = new Uint8Array(w * h);
+  const queue: number[] = [sy * w + sx];
+  seen[sy * w + sx] = 1;
+
+  let best: [number, number] = [sx, sy];
+  let bestScore = -Infinity;
+
+  for (let head = 0; head < queue.length; head++) {
+    const idx = queue[head]!;
+    const x = idx % w;
+    const y = (idx - x) / w;
+
+    // Score by how far along the chosen axis, with a mild pull toward the middle
+    // of the perpendicular one so the gate lands on the edge rather than in a
+    // corner — corners belong to two boundaries and read as nowhere.
+    const along = x * dx + y * dy;
+    const across = dx === 0 ? Math.abs(x - w / 2) / w : Math.abs(y - h / 2) / h;
+    const score = along - across * 4;
+    if (score > bestScore) {
+      bestScore = score;
+      best = [x, y];
+    }
+
+    for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const nx = x + ox;
+      const ny = y + oy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const ni = ny * w + nx;
+      if (seen[ni] || !world.isWalkable(nx, ny)) continue;
+      seen[ni] = 1;
+      queue.push(ni);
+    }
+  }
+
+  return best;
+}
+
+/**
+ * A road from where Aldez wakes to the gate, laid after generation.
+ *
+ * The point is that the town should be findable by *looking*, not only by Aldez
+ * mentioning it. A track underfoot is the oldest wayfinding device there is: you
+ * do not have to be told to follow a road, and it survives the player ignoring
+ * every line of text in the game.
+ *
+ * L-shaped rather than diagonal, two tiles wide, and it only ever paves ground
+ * that was already walkable — it must not punch a causeway through a lake or
+ * flatten the barrier that makes a region feel bounded. Where it cannot pave, it
+ * simply does not, and the gap reads as the road being old.
+ */
+export function carveTownRoad(
+  world: World,
+  from: { x: number; y: number },
+  toTx: number,
+  toTy: number,
+): void {
+  const sx = Math.floor(from.x / TILE);
+  const sy = Math.floor(from.y / TILE);
+
+  const pave = (tx: number, ty: number): void => {
+    for (let dy = 0; dy < 2; dy++) {
+      for (let dx = 0; dx < 2; dx++) {
+        const x = tx + dx;
+        const y = ty + dy;
+        // Grass only. Paving over water would build a bridge; paving over a
+        // room's floor would redecorate a dungeon.
+        if (world.at(x, y) === TileKind.Grass) world.setTile(x, y, TileKind.Dirt);
+      }
+    }
+  };
+
+  // Horizontal leg, then vertical. One corner is enough to read as a route and
+  // cheap enough that it never wanders through anything important.
+  const stepX = Math.sign(toTx - sx);
+  for (let x = sx; x !== toTx && stepX !== 0; x += stepX) pave(x, sy);
+  const stepY = Math.sign(toTy - sy);
+  for (let y = sy; y !== toTy && stepY !== 0; y += stepY) pave(toTx, y);
+  pave(toTx, toTy);
+}
+
 /** How many of the meadow's rooms hold anything at all. */
 const MEADOW_OCCUPIED = 0.34;
 

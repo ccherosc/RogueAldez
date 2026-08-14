@@ -52,7 +52,9 @@ import { beatFor, objectiveLine, beatThought } from '../chronicle/thread.ts';
 import type { Beat } from '../chronicle/thread.ts';
 import { selfTalk, IDLE_LINES } from '../chronicle/hints.ts';
 import type { HintTarget } from '../chronicle/hints.ts';
-import { generateFloor, gateBarTiles } from '../gen/floor.ts';
+import {
+  generateFloor, gateBarTiles, carveTownRoad, farthestReachable,
+} from '../gen/floor.ts';
 import type { GeneratedFloor } from '../gen/floor.ts';
 import { loadSave, writeSave, emptySave } from './save.ts';
 import type { SaveData } from './save.ts';
@@ -84,6 +86,26 @@ import type { GearItem } from '../chronicle/gear.ts';
 import type { MenuState, PadStatus } from '../ui/menu.ts';
 import { drawRevision, revisionReadyAt } from '../ui/revision.ts';
 import type { SolidQuery } from '../physics/collide.ts';
+
+/**
+ * Varies the title rotation between sessions.
+ *
+ * Everything in `src/` draws from seeded streams so a world can be replayed, and
+ * the world seed is a constant — which is correct for the game and wrong for a
+ * wallpaper, because it means every player's title screen shows the same regions
+ * in the same order forever. The clock is read exactly once, here, and feeds
+ * nothing but which scenery is on screen behind the menu. No simulation, no
+ * generation, and nothing a run can observe.
+ */
+const SESSION_SALT = Math.floor(Date.now() / 1000) & 0xffff;
+
+/** The four ways Amberwake can lie from where Aldez wakes. */
+const TOWN_DIRECTIONS = [
+  { name: 'east', dx: 1, dy: 0 },
+  { name: 'west', dx: -1, dy: 0 },
+  { name: 'south', dx: 0, dy: 1 },
+  { name: 'north', dx: 0, dy: -1 },
+] as const;
 
 /** What Amberwake adds to your name each time you draw on someone in it. */
 const BOUNTY_PER_OFFENCE = 5;
@@ -251,6 +273,8 @@ export class Scene {
   private inTown = false;
   /** the road marker in the meadow that leads to Amberwake */
   private townGate: Entity | null = null;
+  /** Which way Amberwake lies this life. Shown on the objective line. */
+  private townDir = 'east';
   /** person-Draft pairs already counted toward Echo Memory */
   private metThisDraft = new Set<string>();
   private pickupBanner = 0;
@@ -360,15 +384,34 @@ export class Scene {
    * away and loads the real meadow, so nothing here can leak into a run.
    */
   private showcase(): void {
-    // Keyed on the life as well as the visit count. The world seed is a fixed
-    // constant, so without draftsLived every player's first title screen would
-    // be the same region forever.
-    const rng = this.rng.stream(`showcase:${this.save.draftsLived}:${this.showcaseCount++}`);
-    this.forcedBiome = rng.pick(BIOMES).id;
-    this.loadDraft(this.draft, 3 + rng.int(0, 3));
+    // A shuffled bag rather than an independent roll each time.
+    //
+    // Rolling picked the same region twice in three showings, and the world seed
+    // is a fixed constant so every fresh player saw the identical first screen
+    // forever. Drawing without replacement means sixteen showings show sixteen
+    // biomes, and the bag is reshuffled only once it is empty — which is the
+    // difference between "random" and what people actually mean by random.
+    if (this.showcaseBag.length === 0) {
+      const rng = this.rng.stream(`showcase-bag:${this.showcaseEpoch++}:${SESSION_SALT}`);
+      const ids = BIOMES.map((b) => b.id);
+      // Fisher-Yates, so every ordering is equally likely.
+      for (let i = ids.length - 1; i > 0; i--) {
+        const j = rng.int(0, i);
+        [ids[i], ids[j]] = [ids[j]!, ids[i]!];
+      }
+      this.showcaseBag = ids;
+    }
+
+    const rng = this.rng.stream(`showcase:${this.showcaseEpoch}:${this.showcaseBag.length}`);
+    this.forcedBiome = this.showcaseBag.pop()!;
+    // Depth varies too, so the same biome is not the same picture twice: deeper
+    // floors carry a wider roster and more of the set dressing.
+    this.loadDraft(this.draft, 2 + rng.int(0, 4));
   }
 
-  private showcaseCount = 0;
+  private showcaseBag: string[] = [];
+  private showcaseEpoch = 0;
+
   /**
    * True until the player starts a run.
    *
@@ -550,12 +593,51 @@ export class Scene {
     // way out that is not downward, which is what makes the town feel like a
     // destination rather than another floor.
     if (!this.fixture && depth === 0 && !this.inTown) {
-      const gx = this.floor.spawn.x + 120;
-      const gy = this.floor.spawn.y - 40;
-      this.townGate = this.entities.spawn({
-        kind: 'prop', spriteKey: 'prop.teleporter.0',
-        x: gx, y: gy, halfW: 8, boxH: 8, solid: false, breakable: false,
+      // Amberwake lies in one of the four directions, and which one is a fact
+      // about this life. It used to sit 120px from wherever you woke, which made
+      // it a thing you tripped over rather than a place you travelled to — and
+      // put it in the same relative spot every single time.
+      //
+      // The gate goes at the far edge of the meadow, so reaching it means
+      // crossing the region: two or three screens of open country with the road
+      // running under your feet the whole way. That walk is the first thirty
+      // minutes' worth of "getting the lay of the land".
+      // The direction is picked *after* looking at where Aldez woke.
+      //
+      // Choosing it blind put the gate within one screen on eight seeds in a
+      // hundred — every time the waking place happened to sit near that edge
+      // already. "Amberwake lies north" is a poor promise when north is thirty
+      // paces away, so the four directions are measured first and only the ones
+      // that are actually a journey are eligible.
+      const dirRng = this.rng.stream(`town-dir:${this.draft.seed}`);
+      const spawnTx = Math.floor(this.floor.spawn.x / TILE);
+      const spawnTy = Math.floor(this.floor.spawn.y / TILE);
+
+      const candidates = TOWN_DIRECTIONS.map((d) => {
+        const [x, y] = farthestReachable(this.world, this.floor.spawn, d.dx, d.dy);
+        return { d, x, y, away: Math.hypot(x - spawnTx, y - spawnTy) };
       });
+      const worthy = candidates.filter((c) => c.away >= ROOM_TILES_W);
+      // If the region is so cramped that no direction is a journey, take the
+      // longest one there is rather than pretending.
+      const pick = worthy.length > 0
+        ? dirRng.pick(worthy)
+        : candidates.reduce((a, b) => (b.away > a.away ? b : a));
+
+      this.townDir = pick.d.name;
+      const tx = pick.x;
+      const ty = pick.y;
+
+      if (this.world.isWalkable(tx, ty)) {
+        carveTownRoad(this.world, this.floor.spawn, tx, ty);
+        this.townGate = this.entities.spawn({
+          kind: 'prop', spriteKey: 'prop.teleporter.0',
+          x: tx * TILE + TILE / 2, y: ty * TILE + TILE - 1,
+          halfW: 8, boxH: 8, solid: false, breakable: false,
+        });
+      } else {
+        this.townGate = null;
+      }
     } else {
       this.townGate = null;
     }
@@ -679,10 +761,7 @@ export class Scene {
     // Arm only after a beat, and only after the player has stepped off any pad.
     // Without both, walking across the hub chain-fires teleports: arrive, be
     // standing near a fresh pad, instantly leave again.
-    if (this.teleportCooldown > 0) {
-      this.teleportCooldown--;
-      return;
-    }
+    if (this.teleportCooldown > 0) return;
     const onPadNow = this.teleporterIds.some((id) => {
       const pad = this.entities.all.find((e) => e.id === id);
       if (!pad || !pad.alive) return false;
@@ -1924,6 +2003,17 @@ export class Scene {
       this.spawnAmbient();
       this.updateTutor(input);
 
+      // The arrival cooldown ticks here, not inside checkTeleporters().
+      //
+      // It used to live there, behind that function's early return for "this
+      // floor has no pads" — so on the meadow, which has had no pads since the
+      // opening room was cleaned up, it was set to 50 on load and never
+      // decremented again. Anything else gated on it was therefore dead. That is
+      // exactly what happened to the town gate: "step on to enter" was true, the
+      // gate was simply never armed. A timer that only advances when an
+      // unrelated feature happens to be present is a trap.
+      if (this.teleportCooldown > 0) this.teleportCooldown--;
+
       // Step onto the road marker to travel to the town.
       if (this.townGate?.alive && this.teleportCooldown <= 0) {
         const d = Math.hypot(this.townGate.x - this.player.x, this.townGate.y - this.player.y);
@@ -2196,6 +2286,20 @@ export class Scene {
     const dx = this.floor.exit.x - this.player.x;
     const dy = this.floor.exit.y - this.player.y;
     if (dx * dx + dy * dy > 14 * 14) return false;
+
+    // The first dungeon is past the town, not beside it.
+    //
+    // Amberwake is where the run is provisioned — a weapon, a little armour, a
+    // sense of what year it is — and a player who walks straight down without
+    // ever finding it arrives underground with a rusted blade and no idea what
+    // they are looking for. Gating the stairs on the visit is what makes the
+    // town part of the route rather than an optional errand.
+    if (this.depth === 0 && !this.visitedTown) {
+      this.notice = `amberwake first - it lies ${this.townDir}`;
+      this.noticeFrames = 150;
+      sfx.hitBlocked();
+      return false;
+    }
 
     this.amber += 5;
     this.particles.burst(this.player.x, this.player.y - 8, {
@@ -2732,7 +2836,11 @@ export class Scene {
         // is what makes the world builder legible from inside the game.
         draftLine: `${this.biome.name} - floor ${this.depth + 1} of ${this.act.floors}`,
         subLine: draftSummary(this.draft),
-        objective: objectiveLine(this.beat),
+        // Naming the direction turns a goal into an instruction. It only
+        // appears while the town is what he is looking for.
+        objective: this.beat === 'reach-town'
+          ? `${objectiveLine(this.beat)} - ${this.townDir}`
+          : objectiveLine(this.beat),
         thought: this.mutter,
         // The rebirth couplet is already Aldez thinking out loud, and stacking a
         // second thought under it put four separate voices on the screen in the
