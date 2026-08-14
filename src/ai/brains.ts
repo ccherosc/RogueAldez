@@ -30,9 +30,9 @@ export interface EnemyStats {
 }
 
 export const ENEMY_STATS: Record<string, EnemyStats> = {
-  octorok: { hp: 2, speed: 0.55, contactDamage: 4, halfW: 6, boxH: 11, debris: 'fx.gore' },
-  moblin: { hp: 3, speed: 0.7, contactDamage: 4, halfW: 6, boxH: 13, debris: 'fx.gore' },
-  keese: { hp: 1, speed: 0.9, contactDamage: 2, halfW: 5, boxH: 10, debris: 'fx.gore' },
+  octorok: { hp: 2, speed: 0.42, contactDamage: 4, halfW: 6, boxH: 11, debris: 'fx.gore' },
+  moblin: { hp: 3, speed: 0.58, contactDamage: 4, halfW: 6, boxH: 13, debris: 'fx.gore' },
+  keese: { hp: 1, speed: 0.72, contactDamage: 2, halfW: 5, boxH: 10, debris: 'fx.gore' },
   // The big ones. Scarce by placement, resistant to knockback by mass — a sword
   // hit that shoves a Keese four tiles barely rocks a Hulk on its heels.
   hulk: { hp: 10, speed: 0.35, contactDamage: 6, halfW: 13, boxH: 26, debris: 'fx.gore', knockScale: 0.2 },
@@ -40,7 +40,10 @@ export const ENEMY_STATS: Record<string, EnemyStats> = {
 };
 
 /** Frames Moblin visibly winds up before charging — the player's window to react. */
-export const MOBLIN_TELEGRAPH = 20;
+// Long enough to see, react to, and beat. 20 frames is a third of a second —
+// technically a tell, practically a surprise. 34 is readable without being a
+// pause, and the difficulty table stretches it further still on early tiers.
+export const MOBLIN_TELEGRAPH = 34;
 const MOBLIN_CHARGE_FRAMES = 34;
 const MOBLIN_SIGHT = 96;
 

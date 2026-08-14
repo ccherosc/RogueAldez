@@ -61,23 +61,60 @@ const EMPTY: PadState = {
 
 export class GamepadReader {
   private previous = new Map<number, boolean>();
-  /** Set after a SecurityError so a hostile sandbox is asked exactly once. */
-  private unavailable = false;
+  /**
+   * Frames to wait before asking again after a SecurityError.
+   *
+   * This used to latch off permanently on the first failure, which was wrong in
+   * the one case that matters: a page can be denied gamepad access early and
+   * granted it later (permission policies, a pad paired after load). Backing off
+   * and retrying costs nothing and means plugging a controller in mid-session
+   * actually works.
+   */
+  private retryIn = 0;
+  private lastId = '';
+
+  /** For the controls screen: what the reader can actually see right now. */
+  status(): { connected: boolean; id: string; blocked: boolean; buttons: number[]; axes: number[] } {
+    let pads: (Gamepad | null)[] = [];
+    try {
+      pads = typeof navigator?.getGamepads === 'function' ? Array.from(navigator.getGamepads()) : [];
+    } catch {
+      return { connected: false, id: '', blocked: true, buttons: [], axes: [] };
+    }
+    const pad = pads.find((p): p is Gamepad => p !== null && p.connected);
+    if (!pad) return { connected: false, id: '', blocked: false, buttons: [], axes: [] };
+    return {
+      connected: true,
+      id: pad.id,
+      blocked: false,
+      buttons: pad.buttons.map((b, i) => (b.pressed ? i : -1)).filter((i) => i >= 0),
+      axes: pad.axes.map((a) => Math.round(a * 100) / 100),
+    };
+  }
 
   /** Poll once per simulation step. */
   read(): PadState {
-    if (this.unavailable) return EMPTY;
+    if (this.retryIn > 0) {
+      this.retryIn--;
+      return EMPTY;
+    }
     let pads: (Gamepad | null)[] = [];
     try {
       pads = typeof navigator?.getGamepads === 'function' ? Array.from(navigator.getGamepads()) : [];
     } catch {
       // Sandboxed iframes without the gamepad permissions-policy throw here.
       // This runs every simulation tick, so an unguarded throw would not lose
-      // gamepad support — it would freeze the entire game.
-      this.unavailable = true;
+      // gamepad support — it would freeze the entire game. Back off ~3s.
+      this.retryIn = 180;
       return EMPTY;
     }
     const pad = pads.find((p): p is Gamepad => p !== null && p.connected);
+    if (pad && pad.id !== this.lastId) {
+      // A different pad (or the first one) — drop stale edge state so the first
+      // press after connecting registers rather than being eaten as "held".
+      this.previous.clear();
+      this.lastId = pad.id;
+    }
     if (!pad) {
       this.previous.clear();
       return EMPTY;

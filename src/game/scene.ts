@@ -44,6 +44,7 @@ import type { RelicEffects, RelicId } from '../chronicle/relics.ts';
 import { drawReliquary } from '../ui/reliquary.ts';
 import { sfx } from '../audio/sfx.ts';
 import { music } from '../audio/music.ts';
+import { tierFor, difficultyFor } from '../chronicle/difficulty.ts';
 import { generateFloor, gateBarTiles } from '../gen/floor.ts';
 import type { GeneratedFloor } from '../gen/floor.ts';
 import { loadSave, writeSave, emptySave } from './save.ts';
@@ -55,7 +56,7 @@ import { drawTextCentred } from '../ui/text.ts';
 import type { LightBuffer } from '../render/lights.ts';
 import { drawMenu, menuLength, BOSS_ITEMS } from '../ui/menu.ts';
 import { Tutor, LESSON_IDS } from '../ui/tutor.ts';
-import type { MenuState } from '../ui/menu.ts';
+import type { MenuState, PadStatus } from '../ui/menu.ts';
 import { drawRevision, revisionReadyAt } from '../ui/revision.ts';
 import type { SolidQuery } from '../physics/collide.ts';
 
@@ -128,6 +129,8 @@ export class Scene {
   draft!: Draft;
   mode: SceneMode = 'playing';
   readonly menu: MenuState = { screen: 'root', cursor: 0 };
+  /** live pad readout for the controls screen; main.ts fills it each frame */
+  padStatus: PadStatus | undefined;
   /** rebirth hint lines, shown for hintFrames after each waking */
   private hintLines: [string, string] | null = null;
   private hintFrames = 0;
@@ -348,10 +351,15 @@ export class Scene {
 
     // The ramp: the same Octorok that dies in two hits on floor two takes four
     // in the Belliron Peaks. Keese stay fragile — a tanky bat is just tedious.
-    const hpBonus = this.act.pressure + Math.floor(depth / 2);
+    const diff = difficultyFor(tierFor(this.act.pressure, depth));
     for (const spawn of this.floor.enemies) {
       const e = this.entities.spawn(Brains.spawnInit(spawn.variant, spawn.x, spawn.y));
-      if (spawn.variant !== 'keese') e.hp += hpBonus;
+      // The cap is the promise: nothing but a boss takes more than two hits
+      // until the player has cleared an Act. Bosses are exempt — a Colossus you
+      // can kill in two swings is not a Colossus.
+      if (e.variant !== 'hulk' && e.variant !== 'colossus') {
+        e.hp = Math.min(e.hp, diff.maxHp);
+      }
       this.brains.register(e);
     }
 
@@ -819,11 +827,15 @@ export class Scene {
           this.mode = 'playing';
           this.showRebirthHint();
         } else {
-          this.menu.screen = this.menu.cursor === 1 ? 'teleport' : 'boss';
+          this.menu.screen =
+            this.menu.cursor === 1 ? 'controls' : this.menu.cursor === 2 ? 'teleport' : 'boss';
           this.menu.cursor = 0;
         }
         sfx.pickup();
         break;
+
+      case 'controls':
+        break; // read-only; X goes back
 
       case 'teleport': {
         const target = BIOMES[this.menu.cursor];
@@ -1859,7 +1871,7 @@ export class Scene {
     batch.setNormalMix(0);
     batch.begin(0, 0, viewport.w, viewport.h);
     if (this.mode === 'menu') {
-      drawMenu(batch, this.menu, this.tick);
+      drawMenu(batch, this.menu, this.tick, this.padStatus);
     } else if (this.mode === 'reliquary') {
       drawReliquary(batch, {
         cursor: this.reliquaryCursor,

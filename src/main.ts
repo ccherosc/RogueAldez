@@ -98,6 +98,8 @@ async function boot(): Promise<void> {
       // Keyboard, touch and gamepad all feed one snapshot; whichever the player
       // reaches for wins, and nothing downstream knows the difference.
       const snapshot = mergePad(input.step(), pads.read());
+      // The controls screen shows what the browser will actually admit to.
+      if (scene.mode === 'menu') scene.padStatus = pads.status();
       if (snapshot.invinciblePressed) scene.invincible = !scene.invincible;
 
       // Browsers refuse to start audio without a gesture, so the graph is built

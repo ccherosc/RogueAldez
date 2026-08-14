@@ -17,6 +17,7 @@ import { TILE } from '../art/tiles.ts';
 import { World, TileKind } from '../world/tilemap.ts';
 import type { Draft } from '../chronicle/draft.ts';
 import type { Act } from '../chronicle/acts.ts';
+import { tierFor, difficultyFor } from '../chronicle/difficulty.ts';
 import type { Biome } from '../worldgen/biomes.ts';
 import { unionTags } from '../worldgen/tags.ts';
 import type { Tag } from '../worldgen/tags.ts';
@@ -1286,15 +1287,23 @@ function populate(
 ): void {
   if (room.kind === 'rest') return;
 
-  // The first floor of every Draft is a sanctuary: teleporters, fauna, props —
-  // and nothing hostile. The game begins when you *choose* to leave, and the
-  // curve begins at floor two.
-  if (depth === 0) return;
+  const tier = tierFor(act.pressure, depth);
+  const diff = difficultyFor(tier);
 
-  const base = room.kind === 'treasure' ? 3 : 2;
-  // Pressure rises with depth in a floor, with the Act, and with instability.
-  const count =
-    base + depth + act.pressure + Math.min(3, Math.floor(draft.instability / 2)) + rng.int(0, 1);
+  // The waking meadow is no longer empty. It was a sanctuary on the theory that
+  // arriving to nothing is peaceful; in practice a player holding a sword with
+  // nothing to hit learns nothing and wanders. One weak Erratum in some rooms
+  // gives the first minute a verb to practise, and tier 0 caps at a single hit,
+  // so it teaches without threatening.
+  if (depth === 0 && (room.kind === 'entrance' || !rng.chance(0.5))) return;
+
+  const count = Math.max(
+    1,
+    diff.count
+      + (room.kind === 'treasure' ? 1 : 0)
+      + Math.min(2, Math.floor(draft.instability / 3))
+      + rng.int(0, 1),
+  );
 
   // Candidate tiles, filtered to walkable ground. Placing on raw coordinates
   // drops enemies inside ponds and pillars, where they are stuck and unkillable.
@@ -1308,11 +1317,11 @@ function populate(
   if (spots.length === 0) return;
   composeEncounter(spots, room, count, tags, rng, out);
 
-  // The big ones are scarce on purpose. One Hulk per unlucky room, never before
-  // floor three, never in the room before the boss door — rarity is what makes
-  // its silhouette mean something when it finally fills a doorway.
-  const bigThreat = depth + act.pressure;
-  if (bigThreat >= 2 && room.kind === 'combat' && rng.chance(0.14) && spots.length > count + 4) {
+  // The big ones are scarce on purpose. Rarity is what makes that silhouette
+  // mean something when it finally fills a doorway — and the curve now decides,
+  // so they cannot turn up in the first dungeon by accident.
+  if (diff.bigChance > 0 && room.kind === 'combat'
+      && rng.chance(diff.bigChance) && spots.length > count + 4) {
     const [tx, ty] = spots[count + 1]!;
     out.push({ variant: 'hulk', x: tx * TILE + TILE / 2, y: ty * TILE + TILE - 1 });
   }

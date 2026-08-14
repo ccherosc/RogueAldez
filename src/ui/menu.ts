@@ -14,14 +14,39 @@ import { BIOMES } from '../worldgen/biomes.ts';
 import type { SpriteBatch } from '../render/batcher.ts';
 import { drawText, drawTextCentred } from './text.ts';
 
-export type MenuScreen = 'root' | 'teleport' | 'boss';
+export type MenuScreen = 'root' | 'teleport' | 'boss' | 'controls';
 
 export interface MenuState {
   screen: MenuScreen;
   cursor: number;
 }
 
-export const ROOT_ITEMS = ['start', 'teleport', 'boss fights'] as const;
+export const ROOT_ITEMS = ['start', 'controls', 'teleport', 'boss fights'] as const;
+
+/** What the controls screen is told about the pad, so ui/ never polls hardware. */
+export interface PadStatus {
+  connected: boolean;
+  id: string;
+  blocked: boolean;
+  buttons: number[];
+  axes: number[];
+}
+
+// The bitmap font carries letters, digits and a small set of punctuation. Slash
+// and pipe are not among them and render as '?', so the columns are separated by
+// spacing rather than by glyphs the font cannot draw.
+const KEY_ROWS: ReadonlyArray<readonly [string, string, string]> = [
+  ['move', 'arrows or wasd', 'stick or d-pad'],
+  ['sword', 'z or space', 'a or x'],
+  ['spin', 'hold sword', 'hold a'],
+  ['lift and throw', 'x or e', 'b'],
+  ['use item', 'c or shift', 'y'],
+  ['cycle item', 'q or tab', 'shoulders'],
+  ['shield', 'stand still', 'stand still'],
+  ['menu', 'esc', 'start'],
+  ['fullscreen', 'f', 'select'],
+  ['god mode', 'i or f4', '-'],
+];
 export const BOSS_ITEMS = [
   { id: 'hulk', label: 'the hulk - miniboss' },
   { id: 'colossus', label: 'the colossus - megaboss' },
@@ -32,10 +57,69 @@ export function menuLength(state: MenuState): number {
     case 'root': return ROOT_ITEMS.length;
     case 'teleport': return BIOMES.length;
     case 'boss': return BOSS_ITEMS.length;
+    case 'controls': return 1;
   }
 }
 
-export function drawMenu(batch: SpriteBatch, state: MenuState, frame: number): void {
+/**
+ * Controls, and a live readout of whatever pad the browser will admit to.
+ *
+ * The readout is the point. "Controller doesn't work" has at least four causes —
+ * the browser hides pads until a button is pressed, a sandboxed frame can block
+ * the API outright, the pad may be paired but asleep, or the mapping may be
+ * non-standard — and they are indistinguishable from inside the game. Showing
+ * the raw button and axis numbers turns an unfalsifiable complaint into a
+ * two-second check: press a button, see whether a number appears.
+ */
+function drawControls(batch: SpriteBatch, pad: PadStatus, frame: number): void {
+  const cx = viewport.w / 2;
+  drawTextCentred(batch, cx, 22, 'controls', 0.95);
+
+  drawText(batch, cx - 124, 32, 'action', 0.4);
+  drawText(batch, cx - 48, 32, 'keyboard', 0.4);
+  drawText(batch, cx + 30, 32, 'gamepad', 0.4);
+
+  let y = 42;
+  for (const [action, keys, pad] of KEY_ROWS) {
+    drawText(batch, cx - 124, y, action, 0.8);
+    drawText(batch, cx - 48, y, keys, 0.6);
+    drawText(batch, cx + 30, y, pad, 0.6);
+    y += 9;
+  }
+
+  y += 6;
+  drawTextCentred(batch, cx, y, '- gamepad -', 0.7);
+  y += 10;
+
+  if (pad.blocked) {
+    drawTextCentred(batch, cx, y, 'blocked by this page. try the localhost build', 0.85);
+    y += 9;
+    drawTextCentred(batch, cx, y, 'an embedded frame can refuse gamepad access', 0.45);
+  } else if (!pad.connected) {
+    // Browsers deliberately hide pads until the page has seen input from one.
+    const nudge = Math.floor(frame / 30) % 2 === 0
+      ? 'no pad seen yet - press any button on it'
+      : 'no pad seen yet';
+    drawTextCentred(batch, cx, y, nudge, 0.85);
+    y += 9;
+    drawTextCentred(batch, cx, y, 'browsers hide controllers until one is used', 0.45);
+  } else {
+    drawTextCentred(batch, cx, y, pad.id.slice(0, 44).toLowerCase(), 0.75);
+    y += 9;
+    const pressed = pad.buttons.length ? `buttons ${pad.buttons.join(' ')}` : 'press a button to test';
+    drawTextCentred(batch, cx, y, pressed, 0.9);
+    y += 9;
+    const [ax = 0, ay = 0] = pad.axes;
+    drawTextCentred(batch, cx, y, `stick ${ax.toFixed(2)} ${ay.toFixed(2)}`, 0.6);
+  }
+}
+
+export function drawMenu(
+  batch: SpriteBatch,
+  state: MenuState,
+  frame: number,
+  pad?: PadStatus,
+): void {
   // Dim the hub rather than hide it.
   for (let y = 0; y < viewport.h; y += 8) {
     for (let x = 0; x < viewport.w; x += 8) {
@@ -44,6 +128,18 @@ export function drawMenu(batch: SpriteBatch, state: MenuState, frame: number): v
   }
 
   const cx = viewport.w / 2;
+
+  // The controls screen is a dense table and needs the whole panel, so it draws
+  // its own header instead of sitting under the cartridge title.
+  if (state.screen === 'controls') {
+    drawControls(batch, pad ?? {
+      connected: false, id: '', blocked: false, buttons: [], axes: [],
+    }, frame);
+    if (Math.floor(frame / 24) % 2 === 0) {
+      drawTextCentred(batch, cx, viewport.h - 14, 'x  back', 0.8);
+    }
+    return;
+  }
 
   // Title: the name set wide, the way a cartridge label would.
   const title = 'R O G U E   A L D E Z';
@@ -69,9 +165,11 @@ export function drawMenu(batch: SpriteBatch, state: MenuState, frame: number): v
   switch (state.screen) {
     case 'root':
       drawRow(0, 'start', 'wake in the vale');
-      drawRow(1, 'teleport', 'visit any region');
-      drawRow(2, 'boss fights', 'face the big ones');
+      drawRow(1, 'controls', 'keys, pad, and a live pad test');
+      drawRow(2, 'teleport', 'visit any region');
+      drawRow(3, 'boss fights', 'face the big ones');
       break;
+
 
     case 'teleport': {
       // Two columns; sixteen biomes will not fit in one.

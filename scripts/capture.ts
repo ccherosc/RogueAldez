@@ -415,22 +415,23 @@ async function testLethal(browser: Browser): Promise<void> {
   // blow i-frames freeze forever. Hit-to-hit spacing is the number the bar
   // actually specifies, and hitstop ticks are excluded because they freeze the
   // countdown.
-  const gaps: number[] = [];
-  let sinceHit = -1;
+  // Measure the counter itself, at the instant it is granted.
+  //
+  // This used to time the gap between successive hits and require 45..51, which
+  // only equals the i-frame window when the player is being re-hit the moment it
+  // lapses. Slowing the enemies down made the gaps 52-63 and failed the check on
+  // a game whose i-frames had not changed at all — the test was measuring enemy
+  // approach speed and calling it invulnerability. The value the bar specifies is
+  // the window granted on a hit, so read exactly that.
+  const granted: number[] = [];
   let previous = 0;
   for (const f of fs) {
     const iframes = Number(f['iframes']);
-    const hit = iframes > previous; // i-frames only jump up on a fresh hit
+    if (iframes > previous) granted.push(iframes); // only ever jumps up on a fresh hit
     previous = iframes;
-    if (hit) {
-      if (sinceHit > 0) gaps.push(sinceHit);
-      sinceHit = 0;
-      continue;
-    }
-    if (sinceHit >= 0 && Number(f['stop']) === 0) sinceHit++;
   }
-  check('i-frames last 48', gaps.some((n) => n >= 45 && n <= 51),
-    gaps.length ? gaps.join(',') : 'only one hit observed');
+  check('i-frames last 48', granted.some((n) => n >= 46 && n <= 48),
+    granted.length ? granted.join(',') : 'no hit observed');
   check('death reaches the revision scene', s.mode === 'revising', s.mode);
   await page.waitForTimeout(1600);
   await shot(page, 'lethal-revision');
