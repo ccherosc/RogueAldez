@@ -176,6 +176,18 @@ const ESSENCE_ROLES: Record<Essence, Role[]> = {
 };
 
 /** The role this person holds in a town in this condition, or null if absent. */
+/**
+ * May this person hold this role at all?
+ *
+ * The same table `roleFor` filters on, exposed so a caller that has to *repair*
+ * a town can do it without inventing a person who could never exist. Orra makes
+ * things; she can be a scavenger picking usable metal out of a ruin, and she can
+ * never be a noble.
+ */
+export function essenceAllows(essence: Essence, role: Role): boolean {
+  return ESSENCE_ROLES[essence].includes(role);
+}
+
 export function roleFor(
   person: Townsperson,
   condition: TownCondition,
@@ -188,6 +200,23 @@ export function roleFor(
 }
 
 /** Merchants and smiths will trade; nobody else has anything to sell. */
+/**
+ * Who will do business with you.
+ *
+ * Scavengers and beggars are on this list, and that is the whole point. The
+ * first version had only merchants, smiths and innkeepers — roles that a ruined
+ * town has no room for — so abandoned, burned and plagued Amberwake produced
+ * *no trader at all*, in forty towns out of forty. The objective told the player
+ * to go and see what the market had, and there was no market, in four of the six
+ * years the town can be in.
+ *
+ * A place does not stop trading because it has burned. It trades worse, and out
+ * of worse things, and with someone who was doing something else last year —
+ * which is a better scene than a shuttered town anyway. The condition decides
+ * *who* is selling and *what*; it does not get to decide whether commerce
+ * exists.
+ */
 export function trades(role: Role): boolean {
-  return role === 'merchant' || role === 'smith' || role === 'innkeeper';
+  return role === 'merchant' || role === 'smith' || role === 'innkeeper'
+    || role === 'scavenger' || role === 'beggar';
 }

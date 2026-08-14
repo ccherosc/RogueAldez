@@ -347,6 +347,40 @@ async function testTownWalk(browser: Browser): Promise<void> {
   await page.close();
 }
 
+/**
+ * The stairs open once, and stay open.
+ *
+ * The first dungeon is gated on visiting Amberwake. The thread state that
+ * records the visit was being cleared in loadDraft — which also runs on every
+ * floor change and on *leaving town* — so walking back out of the gate erased
+ * the visit and the stairs locked again. Permanently: there is no other way to
+ * set it, and no way to descend without it. The whole game after the meadow was
+ * unreachable and every generator check passed.
+ */
+async function testDescentGate(browser: Browser): Promise<void> {
+  const page = await openFixture(browser, 'town');
+
+  const r = await page.evaluate(`(() => {
+    const s = window.__aldez.scene;
+    const atStairs = function () { s.player.x = s.floor.exit.x; s.player.y = s.floor.exit.y; };
+    s.leaveTown();
+    s.visitedTown = false;              // as if never visited
+    atStairs();
+    const locked = s.checkExit() === false;
+    s.enterTown('flourishing');
+    s.leaveTown();                      // the step that used to erase it
+    const remembered = s.visitedTown === true;
+    atStairs();
+    const opened = s.checkExit() !== false;
+    return { locked: locked, remembered: remembered, opened: opened };
+  })()`) as { locked: boolean; remembered: boolean; opened: boolean };
+
+  check('stairs: locked until Amberwake is found', r.locked);
+  check('stairs: leaving town does not erase the visit', r.remembered);
+  check('stairs: open once the town has been visited', r.opened);
+  await page.close();
+}
+
 async function testBounty(browser: Browser): Promise<void> {
   const page = await openFixture(browser, 'town');
 
@@ -803,6 +837,7 @@ async function main(): Promise<void> {
     ['rooms', testRooms],
     ['bounty', testBounty],
     ['townwalk', testTownWalk],
+    ['descent', testDescentGate],
     ['spin', testSpin],
     ['props', testProps],
     ['items', testItems],

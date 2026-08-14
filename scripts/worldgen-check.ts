@@ -443,6 +443,65 @@ check('same world seed yields an identical climate map', sameClimate);
 }
 
 // ---------------------------------------------------------------------------
+// Somebody is always selling something
+// ---------------------------------------------------------------------------
+// The thread tells the player to go and see what the market has. It was not
+// achievable in four of the six years the town can be in: abandoned, burned and
+// plagued produced no trader at all in forty towns out of forty, because the
+// trading roles were merchant, smith and innkeeper — roles a ruined town has no
+// room for. A place does not stop trading because it burned; it trades worse,
+// out of worse things, with someone who did something else last year.
+{
+  let emptyMarkets = 0;
+  let towns = 0;
+  let essenceBreaks = 0;
+  let leanest = Infinity;
+
+  for (const condition of TOWN_CONDITIONS) {
+    for (let i = 0; i < 40; i++) {
+      const { residents } = generateTown(condition, makeRng(0xb300 + i));
+      const shops = residents.filter((r) => r.shop);
+      if (shops.length === 0) emptyMarkets++;
+      leanest = Math.min(leanest, shops.length);
+      towns++;
+      // The repair must not break the rule it is repairing around: nobody may be
+      // promoted into a role their essence forbids.
+      for (const r of residents) {
+        if (r.id.startsWith('guard-')) continue;
+        if (!ESSENCE_OK[r.essence as Essence]?.includes(r.role)) essenceBreaks++;
+      }
+    }
+  }
+
+  check('every town has someone to trade with', emptyMarkets === 0,
+    `${emptyMarkets} of ${towns} empty, leanest ${leanest}`);
+  check('the trader guarantee never breaks an essence', essenceBreaks === 0,
+    `${essenceBreaks} violations`);
+}
+
+// The first shop visit must be able to do something. A player who crosses the
+// meadow thoroughly should be able to afford the cheapest thing on the board —
+// otherwise the trade beat sends them to a counter they can only look at.
+{
+  const meadow = BIOMES.find((b) => b.id === 'meadow')!;
+  let chests = 0;
+  const FLOORS = 40;
+  for (let i = 0; i < FLOORS; i++) {
+    const draft = rollDraft(1, makeRng(0xc300 + i), i % 5);
+    const floor = generateFloor(draft, actAt(0), meadow, makeRng(draft.seed), 0);
+    chests += floor.world.props.filter((p) => p.key.includes('chest')).length;
+  }
+  // Chests alone: three shards each at the pessimistic end.
+  const pessimistic = (chests / FLOORS) * 3;
+  // Every board carries one item at the floor tier — the thing a first-time
+  // visitor can actually walk out with. Checked against that, not against the
+  // middle of the spread.
+  const floorPrice = priceOf(Math.max(1, 1 - 1) || 1, false);
+  check('the meadow pays for a first purchase', pessimistic >= floorPrice,
+    `${pessimistic.toFixed(0)} shards from chests vs ${floorPrice} for the cheapest slot`);
+}
+
+// ---------------------------------------------------------------------------
 // Getting into Amberwake
 // ---------------------------------------------------------------------------
 // The town was fully connected and still unplayable: buildings are stamped after

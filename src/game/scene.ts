@@ -647,11 +647,6 @@ export class Scene {
     this.roomX = room.rx;
     this.roomY = room.ry;
     this.camera.snapTo(this.roomX * ROOM_PX_W, this.roomY * ROOM_PX_H);
-    // The thread is per life, like everything else the world forgets.
-    this.visitedTown = false;
-    this.spokeToAnyone = false;
-    this.traded = false;
-    this.lastBeat = null;
     this.clearedRooms.clear();
     this.barredRoom = null;
     this.barIds = [];
@@ -1535,7 +1530,19 @@ export class Scene {
     const rng = this.rng.stream(`shop:${resident.id}:${this.draft.seed}:${this.level}`);
     const top = merchantTierFor(this.level);
     this.shopStock = [];
-    for (let i = 0; i < 5; i++) {
+
+    // One item the player can afford *today*, always, at the bottom of the
+    // range. The spread below is centred on standing, which is right for pacing
+    // and wrong for a first visit: crossing the whole meadow and opening every
+    // chest yields around 26 shards, and the cheapest thing a level-one board
+    // offered cost 31. A board you can only look at teaches the player that
+    // shops are scenery, and they stop walking into towns.
+    const floorTier = Math.max(1, this.level - 1);
+    this.shopStock.push(rng.next() < 0.7
+      ? makeWeapon(rng.pick(WEAPON_TYPES), floorTier)
+      : makeArmour(floorTier));
+
+    for (let i = 0; i < 4; i++) {
       // Spread around the player's standing so the board holds something
       // affordable now and something worth coming back for.
       const tier = Math.max(1, top - rng.int(0, 6) + rng.int(0, 2));
@@ -1780,6 +1787,18 @@ export class Scene {
   private beginRevision(): void {
     // Instability rises with each Draft: powerful runs create stronger
     // contradictions, which is the in-fiction reason the world gets harder.
+    // The thread is per *life*, not per floor.
+    //
+    // Resetting it in loadDraft looked equivalent and was not: loadDraft also
+    // runs on every floor change and on leaving town, so walking back out of
+    // Amberwake erased the fact that you had been there — and since the stairs
+    // are gated on that visit, the first dungeon became permanently unenterable.
+    // The one path that must clear it is the one where the world is rewritten.
+    this.visitedTown = false;
+    this.spokeToAnyone = false;
+    this.traded = false;
+    this.lastBeat = null;
+
     const next = rollDraft(this.draft.index + 1, this.rng, this.draft.instability + this.depth + 1);
     this.revisions = diffDrafts(this.draft, next);
     this.pendingDraft = next;

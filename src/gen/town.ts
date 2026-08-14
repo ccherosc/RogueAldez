@@ -17,8 +17,10 @@ import { ROOM_TILES_H, ROOM_TILES_W } from '../core/const.ts';
 import type { Rng } from '../core/rng.ts';
 import { TILE } from '../art/tiles.ts';
 import { World, TileKind } from '../world/tilemap.ts';
-import { CONDITION_PROFILES, TOWNSFOLK, roleFor, trades } from '../worldgen/townsfolk.ts';
-import type { TownCondition, Role } from '../worldgen/townsfolk.ts';
+import {
+  CONDITION_PROFILES, TOWNSFOLK, roleFor, trades, essenceAllows,
+} from '../worldgen/townsfolk.ts';
+import type { TownCondition, Role, Essence } from '../worldgen/townsfolk.ts';
 
 /** Towns are three rooms wide and two tall: big enough to have districts. */
 export const TOWN_COLS = 3;
@@ -278,6 +280,28 @@ export function generateTown(condition: TownCondition, rng: Rng): GeneratedTown 
       shop: trades(role),
     });
     placed++;
+  }
+
+  // Somebody is always selling something.
+  //
+  // Widening the trading roles took the empty-market case from 40 towns in 40
+  // down to a handful, which is the difference between a broken feature and an
+  // occasional disappointment — and an occasional disappointment is still a
+  // player following an objective to a town that cannot satisfy it. Roles are
+  // rolled per person, so "usually someone trades" can always come up empty.
+  //
+  // The fallback promotes whoever is already there rather than adding a
+  // stranger, and only to a role their essence allows, so the guarantee cannot
+  // produce the one thing the cast rules exist to prevent: a person being
+  // someone they could never be.
+  if (!residents.some((r) => r.shop)) {
+    const candidate = residents.find((r) => essenceAllows(r.essence as Essence, 'scavenger'))
+      ?? residents.find((r) => essenceAllows(r.essence as Essence, 'beggar'));
+    if (candidate) {
+      candidate.role = essenceAllows(candidate.essence as Essence, 'scavenger')
+        ? 'scavenger' : 'beggar';
+      candidate.shop = true;
+    }
   }
 
   // Guards stand at the gate, because that is where guards stand.
