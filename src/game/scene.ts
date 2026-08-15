@@ -656,6 +656,13 @@ export class Scene {
         ];
         for (const [ox, oy] of posts) {
           if (!this.world.isWalkable(stx + ox, sty + oy)) continue;
+          // He is solid, so he must stand in the open: every side walkable, or
+          // he ends up backed against a cliff or a treeline where the player can
+          // only reach him from one angle — and can be shouldered off the road
+          // by him on a narrow one.
+          const clear = ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const)
+            .every(([nx, ny]) => this.world.isWalkable(stx + ox + nx, sty + oy + ny));
+          if (!clear) continue;
           this.traveller = this.entities.spawn({
             kind: 'folk', spriteKey: 'folk.poor.0',
             x: (stx + ox) * TILE + TILE / 2, y: (sty + oy) * TILE + TILE - 1,
@@ -1492,7 +1499,13 @@ export class Scene {
     this.player.y = built.spawn.y;
     this.roomX = Math.floor(built.spawn.x / ROOM_PX_W);
     this.roomY = Math.floor(built.spawn.y / ROOM_PX_H);
-    this.camera.snapTo(this.roomX, this.roomY);
+    // snapTo takes *pixels*. This passed room indices, so the camera jumped to
+    // pixel (1,1) — the top-left corner of the map — while Aldez stood in room
+    // (1,1) at pixel (352,384), completely off screen. Every key still worked
+    // and the town was still fully connected; you were simply looking at a
+    // static view of somewhere else. "The town is unplayable, no movement" is
+    // exactly what one wrong unit looks like from the outside.
+    this.camera.snapTo(this.roomX * ROOM_PX_W, this.roomY * ROOM_PX_H);
 
     built.residents.forEach((r, i) => {
       this.entities.spawn({

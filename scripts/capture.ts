@@ -327,6 +327,21 @@ async function testRooms(browser: Browser): Promise<void> {
 async function testTownWalk(browser: Browser): Promise<void> {
   const page = await openFixture(browser, 'town');
 
+  // Before anything else: can the player see himself?
+  //
+  // enterTown passed room *indices* to camera.snapTo, which takes pixels, so the
+  // camera sat at pixel (1,1) while Aldez stood in room (1,1) at pixel
+  // (352,384). Every key worked, the town was fully connected, and the whole
+  // place was unplayable — you were looking at a static view of somewhere else.
+  // Nothing asserted the most basic invariant a game has: the character you
+  // control is on screen.
+  const framed = await page.evaluate(`(() => {
+    const s = window.__aldez.scene, c = s.camera;
+    return s.player.x >= c.viewX && s.player.x <= c.viewX + 256
+        && s.player.y >= c.viewY && s.player.y <= c.viewY + 224;
+  })()`) as boolean;
+  check('town: the player is inside the camera view on arrival', framed);
+
   // Stand at the arrival tile, then hold north the way a player would.
   await page.evaluate(`(() => {
     const s = window.__aldez.scene;
