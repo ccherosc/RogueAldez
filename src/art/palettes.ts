@@ -200,6 +200,24 @@ export const PAL_SLIME = buildPalette('slime', {
   eye: ramp(2, { L: 0.20, C: 0.03, H: 268 }, { L: 0.96, C: 0.02, H: 120 }),
 });
 
+/**
+ * Faces.
+ *
+ * Four skin ramps, two hair ramps and a cloth ramp, sharing one palette so every
+ * portrait in the game can be drawn from a single atlas page. Skin varies by
+ * person rather than by role — Amberwake is a place people come to, and a cast
+ * where everyone looks the same undercuts the one thing the town is for, which
+ * is being recognised across lives.
+ */
+export const PAL_FACE = buildPalette('face', {
+  skinA: ramp(5, { L: 0.42, C: 0.055, H: 48 }, { L: 0.82, C: 0.045, H: 62 }),
+  skinB: ramp(5, { L: 0.30, C: 0.060, H: 40 }, { L: 0.66, C: 0.050, H: 54 }),
+  skinC: ramp(5, { L: 0.22, C: 0.045, H: 34 }, { L: 0.54, C: 0.040, H: 46 }),
+  hair: ramp(5, { L: 0.14, C: 0.030, H: 40 }, { L: 0.58, C: 0.060, H: 68 }),
+  cloth: ramp(5, { L: 0.24, C: 0.055, H: 250 }, { L: 0.60, C: 0.070, H: 268 }),
+  eye: ramp(3, { L: 0.16, C: 0.030, H: 250 }, { L: 0.92, C: 0.020, H: 90 }),
+});
+
 export const PAL_KEESE = buildPalette('keese', {
   body: ramp(7, { L: 0.26, C: 0.045, H: 300 }, { L: 0.56, C: 0.075, H: 285 }),
   eye: ramp(2, { L: 0.72, C: 0.185, H: 32 }, { L: 0.95, C: 0.09, H: 60 }),
@@ -237,6 +255,7 @@ export const ALL_PALETTES: readonly Palette[] = [
   PAL_MOBLIN,
   PAL_KEESE,
   PAL_SLIME,
+  PAL_FACE,
   PAL_PICKUP,
   PAL_PROP,
 ];

@@ -77,6 +77,9 @@ import type { TownResident } from '../gen/town.ts';
 import { CONDITION_PROFILES, TOWN_CONDITIONS } from '../worldgen/townsfolk.ts';
 import type { TownCondition } from '../worldgen/townsfolk.ts';
 import { speak } from '../worldgen/voices.ts';
+import { travellerFor } from '../worldgen/traveller.ts';
+import type { TravellerScene } from '../worldgen/traveller.ts';
+import { PORTRAIT_COUNT } from '../art/sprites.ts';
 import { Inventory } from './inventory.ts';
 import {
   dropTier, makeWeapon, makeArmour, makeTreasure, makeEpicWeapon, makeEpicArmour, WEAPON_TYPES,
@@ -247,6 +250,11 @@ export class Scene {
   private talkingTo: TownResident | null = null;
   private talkLine = '';
   private nearFolk: TownResident | null = null;
+  /** The stranger on the first screen, and where the player is in his speech. */
+  private traveller: Entity | null = null;
+  private travellerScene: TravellerScene | null = null;
+  private talkPage = 0;
+  private nearTraveller = false;
   /** guards hunting the player after an assault */
   private townAlarm = 0;
   /**
@@ -635,6 +643,26 @@ export class Scene {
           x: tx * TILE + TILE / 2, y: ty * TILE + TILE - 1,
           halfW: 8, boxH: 8, solid: false, breakable: false,
         });
+
+        // The walker, a few paces from where Aldez wakes and standing on the
+        // road he is about to follow. Near enough that a player who moves at all
+        // meets him, never so near that he is in the way.
+        const stx = Math.floor(this.floor.spawn.x / TILE);
+        const sty = Math.floor(this.floor.spawn.y / TILE);
+        const posts: Array<[number, number]> = [
+          [pick.d.dx * 3 + 1, pick.d.dy * 3 + 1],
+          [pick.d.dx * 3 - 1, pick.d.dy * 3 - 1],
+          [3, 2], [-3, 2], [3, -2], [-3, -2], [0, 3], [0, -3],
+        ];
+        for (const [ox, oy] of posts) {
+          if (!this.world.isWalkable(stx + ox, sty + oy)) continue;
+          this.traveller = this.entities.spawn({
+            kind: 'folk', spriteKey: 'folk.poor.0',
+            x: (stx + ox) * TILE + TILE / 2, y: (sty + oy) * TILE + TILE - 1,
+            halfW: 6, boxH: 12, solid: true, breakable: false,
+          });
+          break;
+        }
       } else {
         this.townGate = null;
       }
@@ -1714,6 +1742,29 @@ export class Scene {
     return best ? { resident: best.resident, entity: best.entity } : null;
   }
 
+  /**
+   * A stable face for a person.
+   *
+   * Hashed from the id, so Mara has the same face in every Draft and every
+   * session — which is the entire point of portraits here. Index 0 is the
+   * traveller's and is never handed out.
+   */
+  private faceFor(id: string): string {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (Math.imul(h, 31) + id.charCodeAt(i)) >>> 0;
+    return `ui.face.${1 + (h % (PORTRAIT_COUNT - 1))}`;
+  }
+
+  /** Open a multi-page speech from the traveller on the road. */
+  private beginTravellerTalk(): void {
+    this.travellerScene = travellerFor(this.save.draftsLived);
+    this.talkPage = 0;
+    this.spokeToAnyone = true;
+    this.talkingTo = null;
+    this.mode = 'talk';
+    sfx.pickup();
+  }
+
   private beginTalk(resident: TownResident): void {
     const met = this.save.met?.[resident.id] ?? 0;
     const roll = this.rng.stream(`talk:${resident.id}:${this.draft.seed}:${this.tick}`).next();
@@ -1854,6 +1905,24 @@ export class Scene {
     if (this.mode === 'talk') {
       // Z opens the board when they have one. The trade is a continuation of
       // the conversation, not a separate mode you enter from somewhere else.
+      // A multi-page speech advances on the same key that started it, and the
+      // last page hands control back rather than trapping the player.
+      if (this.travellerScene) {
+        if (input.attackPressed) {
+          this.talkPage++;
+          if (this.talkPage >= this.travellerScene.lines.length) {
+            this.travellerScene = null;
+            this.mode = 'playing';
+          }
+          return;
+        }
+        if (input.actionPressed || input.menuPressed) {
+          this.travellerScene = null;
+          this.mode = 'playing';
+        }
+        return;
+      }
+
       if (input.attackPressed && this.talkingTo?.shop) {
         this.beginShop(this.talkingTo);
         return;
@@ -2001,6 +2070,18 @@ export class Scene {
       // Someone in reach takes priority over anything liftable. X already means
       // "deal with what is in front of you"; a player standing face to face with
       // Mara Venn and picking up a crate instead would rightly call that broken.
+      // The walker stands outside any town, so he needs his own reach test.
+      if (!this.inTown && this.traveller?.alive) {
+        const d = Math.hypot(this.traveller.x - this.player.x, this.traveller.y - this.player.y);
+        this.nearTraveller = d < 28;
+        if (this.nearTraveller && input.actionPressed) {
+          this.beginTravellerTalk();
+          return;
+        }
+      } else {
+        this.nearTraveller = false;
+      }
+
       this.nearFolk = this.inTown ? (this.folkInReach()?.resident ?? null) : null;
       if (input.actionPressed && this.nearFolk) {
         this.beginTalk(this.nearFolk);
@@ -2744,6 +2825,28 @@ export class Scene {
       batch.draw(d.key, d.x, d.y, { alpha: d.alpha ?? 1, flash: d.flash ?? 0 });
     }
 
+    // Who you could speak to, named over their head. Standing next to a person
+    // and not knowing that talking is a verb is how a player walks past the one
+    // character who explains the game.
+    if (this.nearTraveller && this.traveller?.alive) {
+      drawTextCentred(batch, this.traveller.x, this.traveller.y - 30, 'x speak', 0.8);
+    }
+    if (this.nearFolk) {
+      const e = this.folkInReach()?.entity;
+      if (e) drawTextCentred(batch, e.x, e.y - 30, 'x speak', 0.8);
+    }
+
+    // Who you could speak to, named over their head. Standing beside a person
+    // and not knowing that talking is a verb is how a player walks past the one
+    // character who explains the game.
+    if (this.nearTraveller && this.traveller?.alive) {
+      drawTextCentred(batch, this.traveller.x, this.traveller.y - 30, 'x speak', 0.85);
+    }
+    if (this.nearFolk) {
+      const near = this.folkInReach()?.entity;
+      if (near) drawTextCentred(batch, near.x, near.y - 30, 'x speak', 0.85);
+    }
+
     if (this.townGate?.alive) {
       // The name alone was not enough. "to amberwake" tells you where the thing
       // goes and nothing about what to do with it, so a player can stand beside
@@ -2800,12 +2903,25 @@ export class Scene {
         shards: this.amber,
         level: this.level,
       }, this.tick);
+    } else if (this.mode === 'talk' && this.travellerScene) {
+      drawTalk(batch, {
+        name: this.travellerScene.name,
+        role: this.travellerScene.title,
+        line: this.travellerScene.lines[this.talkPage] ?? '',
+        face: 'ui.face.0',
+        page: this.talkPage,
+        pages: this.travellerScene.lines.length,
+        met: 0,
+        truth: null,
+        shop: false,
+      });
     } else if (this.mode === 'talk' && this.talkingTo) {
       const r = this.talkingTo;
       drawTalk(batch, {
         name: r.name,
         role: r.role,
         line: this.talkLine,
+        face: this.faceFor(r.id),
         met: this.save.met?.[r.id] ?? 0,
         truth: r.anchor ? r.truth : null,
         shop: r.shop,

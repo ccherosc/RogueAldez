@@ -17,6 +17,7 @@ import {
   PAL_DUNGEON,
   PAL_KEESE,
   PAL_SLIME,
+  PAL_FACE,
   PAL_MOBLIN,
   PAL_OCTOROK,
   PAL_PICKUP,
@@ -518,31 +519,206 @@ function moblinFrame(dir: Dir, frame: number): PixelBuffer {
  * player who watches one for three seconds knows everything it can do, which is
  * exactly what the first enemy in a game should offer.
  */
+/**
+ * A talking head, 28x28, built from a handful of dials.
+ *
+ * Portraits are the cheapest storytelling in the game: a face on screen turns a
+ * line of text into somebody saying it, and the whole premise of Amberwake is
+ * that you recognise people whose roles have changed. That only lands if the
+ * face is the same face.
+ *
+ * So every dial here is keyed off the person's *identity* — id, essence — and
+ * never off their role or the town's condition. Mara is Mara whether she is a
+ * merchant this life or a beggar; what changes is the collar and the expression,
+ * which is exactly the reading the story wants.
+ *
+ * Deliberately simple geometry rather than an attempt at rendered portraiture:
+ * these are placeholders in the sense that they can be replaced, and finished in
+ * the sense that they are readable, consistent and nobody has to apologise for
+ * them. See ART_AND_AUDIO.md for the upgrade path.
+ */
+const PORTRAIT = 28;
+
+export interface PortraitSpec {
+  /** 0..2 — which skin ramp */
+  skin: number;
+  /** 0..3 — hairline shape */
+  hair: number;
+  /** 0..2 — brow angle: neutral, raised, drawn down */
+  brow: number;
+  /** 0..2 — mouth: level, lifted, pressed */
+  mouth: number;
+  /** true for a hooded or shawled silhouette */
+  hood: boolean;
+  /** 0..2 — collar shape, the one thing that tracks role rather than person */
+  collar: number;
+}
+
+/**
+ * How many distinct faces the atlas carries.
+ *
+ * Index 0 is reserved for the traveller — hooded, because the first person the
+ * player ever meets should read as someone passing through rather than someone
+ * who lives here.
+ */
+export const PORTRAIT_COUNT = 12;
+
+export function portraitSpecFor(i: number): PortraitSpec {
+  if (i === 0) {
+    return { skin: 1, hair: 0, brow: 1, mouth: 1, hood: true, collar: 2 };
+  }
+  // Spread the dials with small coprime strides so consecutive indices differ in
+  // several features at once — neighbouring faces should not look like siblings.
+  return {
+    skin: i % 3,
+    hair: (i * 5) % 4,
+    brow: (i * 7) % 3,
+    mouth: (i * 11) % 3,
+    hood: i % 7 === 3,
+    collar: (i * 3) % 3,
+  };
+}
+
+function portraitFrame(spec: PortraitSpec): PixelBuffer {
+  const P = PAL_FACE;
+  // Three shades per material, because the working palette is capped at 28 and
+  // a 5-step ramp exposes n = 0..2 through the doubling accessor. At 28 pixels
+  // a face does not want more than shadow, base and light anyway — the fourth
+  // shade would land between two that are already one pixel apart.
+  const skinRamp = ['skinA', 'skinB', 'skinC'][spec.skin % 3]!;
+  const sk = (n: number) => ci(P, `${skinRamp}.${n * 2}`);
+  const hr = (n: number) => ci(P, `hair.${n * 2}`);
+  const cl = (n: number) => ci(P, `cloth.${n * 2}`);
+  const px = new PixelBuffer(PORTRAIT, PORTRAIT);
+
+  // Backing plate, so a portrait reads as a framed thing rather than a floating
+  // head on whatever happens to be behind the talk box.
+  px.rect(0, 0, PORTRAIT, PORTRAIT, cl(0));
+  px.rect(1, 1, PORTRAIT - 2, PORTRAIT - 2, cl(1));
+
+  // Shoulders first; the head overlaps them.
+  px.rect(4, 22, 20, 6, cl(0));
+  if (spec.collar === 1) {
+    // A collar that stands up: authority, or pretending to it.
+    px.rect(7, 21, 3, 4, cl(2));
+    px.rect(18, 21, 3, 4, cl(2));
+  } else if (spec.collar === 2) {
+    // Open and worn: a shawl gone slack.
+    px.rect(6, 22, 16, 2, cl(2));
+  }
+
+  // Head: a rounded box rather than an ellipse, which at this size holds its
+  // silhouette better once the rim light runs over it.
+  px.rect(8, 7, 12, 14, sk(1));
+  px.rect(7, 9, 14, 10, sk(1));
+  px.rect(9, 6, 10, 2, sk(1));
+  // Shading down the right side and under the jaw.
+  px.rect(17, 10, 3, 10, sk(0));
+  px.rect(9, 19, 9, 2, sk(0));
+  // Lit temple, up and left — the one light direction the whole game uses.
+  px.rect(9, 8, 5, 3, sk(2));
+  px.rect(10, 11, 3, 2, sk(2));
+
+  // Neck.
+  px.rect(11, 20, 6, 3, sk(0));
+
+  if (spec.hood) {
+    // A hood frames the face and hides the hair: the silhouette of someone
+    // passing through, or of someone who would rather not be recognised.
+    px.rect(5, 4, 18, 6, cl(2));
+    px.rect(4, 6, 3, 14, cl(2));
+    px.rect(21, 6, 3, 14, cl(2));
+    px.rect(6, 4, 16, 1, cl(1));
+    px.rect(7, 9, 14, 1, cl(0));
+  } else {
+    const hairline = [3, 4, 2, 5][spec.hair % 4]!;
+    px.rect(7, 5, 14, hairline, hr(1));
+    px.rect(7, 5, 14, 1, hr(2));
+    if (spec.hair % 2 === 1) {
+      px.rect(6, 6, 2, 10, hr(0));
+      px.rect(20, 6, 2, 10, hr(0));
+    } else {
+      px.rect(6, 6, 2, 5, hr(0));
+      px.rect(20, 6, 2, 5, hr(0));
+    }
+  }
+
+  // Eyes. Two pixels of white, one of iris — at this size an eye is a dot and
+  // the readable part is the brow above it.
+  for (const ex of [10, 16]) {
+    px.rect(ex, 13, 3, 2, ci(P, 'eye.2'));
+    px.set(ex + 1, 13, ci(P, 'eye.0'));
+    px.set(ex + 1, 14, ci(P, 'eye.0'));
+  }
+
+  // Brow: the whole expression, in six pixels.
+  for (const [bx, dir] of [[10, 1], [16, -1]] as const) {
+    for (let i = 0; i < 3; i++) {
+      const lift = spec.brow === 0 ? 0
+        : spec.brow === 1 ? -Math.round(i * dir * 0.6)
+          : Math.round(i * dir * 0.6);
+      px.set(bx + i, 11 + lift, hr(0));
+    }
+  }
+
+  // Nose, then the mouth — level, lifted at the corners, or pressed thin.
+  px.set(13, 15, sk(0));
+  px.set(13, 16, sk(0));
+  px.rect(12, 18, 4, 1, sk(0));
+  if (spec.mouth === 1) { px.set(11, 17, sk(0)); px.set(16, 17, sk(0)); }
+  if (spec.mouth === 2) { px.set(11, 19, sk(0)); px.set(16, 19, sk(0)); }
+
+  return px;
+}
+
 function slimeFrame(frame: number): PixelBuffer {
   const P = PAL_SLIME;
   const body = (n: number) => ci(P, `body.${n * 2}`);
   const px = new PixelBuffer(ENEMY_CELL, ENEMY_CELL);
 
-  // Squat and wide at rest, taller and narrower at the top of the hop.
+  // Squat and wide at rest, taller and narrower at the top of the hop. The two
+  // frames are one squash-and-stretch cycle, which is the whole animation and
+  // also the whole tell: a player who watches one for three seconds knows
+  // everything it will ever do.
   const w = frame === 0 ? 6 : 5;
   const h = frame === 0 ? 4 : 6;
   const cy = frame === 0 ? 11 : 9;
 
-  px.ellipse(8, cy, w, h, body(1));          // mass
-  px.ellipse(8, cy, w - 1, h - 1, body(2));  // interior
-  px.ellipse(7, cy - 1, w - 3, h - 3, body(3)); // lit crown, offset up-left
+  px.ellipse(8, cy, w, h, body(1));
+  px.ellipse(8, cy, w - 1, h - 1, body(2));
 
-  // A dark seat where it meets the ground, so it sits on the floor rather than
-  // hovering — the same contact logic as the shadow, drawn into the sprite.
-  px.ellipse(8, cy + h - 1, w - 1, 1, body(0));
+  // Translucency, which is the one thing that says "jelly" rather than "rock":
+  // the underside stays dark and the crown goes light, and the boundary between
+  // them sits high, as though light is getting most of the way through.
+  px.ellipse(7, cy - 1, w - 2, h - 2, body(3));
+  px.ellipse(7, cy - 2, w - 3, Math.max(1, h - 4), body(3));
 
-  // A bright highlight bead: the one thing that says "wet" at this size.
-  // body() tops out at 3 — a 7-step ramp exposes n*2 for n = 0..3.
+  // A wet meniscus where it meets the ground, wider than the body — surface
+  // tension, and it seats the creature instead of leaving it hovering.
+  px.ellipse(8, cy + h - 1, w, 1, body(0));
+  px.set(8 - w, cy + h - 1, body(1));
+  px.set(8 + w, cy + h - 1, body(1));
+
+  // Specular bead, up and left with the game's one light direction, plus a
+  // smaller second glint so the surface reads as curved rather than painted.
   px.set(6, cy - h + 2, body(3));
   px.set(7, cy - h + 2, body(3));
+  px.set(6, cy - h + 3, body(3));
+  px.set(10, cy - 1, body(2));
 
-  px.set(6, cy, ci(P, 'eye.0'));
-  px.set(10, cy, ci(P, 'eye.0'));
+  // Eyes float inside it rather than sitting on it: two dark motes with a pale
+  // ring, set deep enough to read as suspended in the mass.
+  for (const ex of [6, 10]) {
+    px.set(ex, cy, ci(P, 'eye.0'));
+    px.set(ex, cy - 1, ci(P, 'eye.1'));
+  }
+
+  // A trailing drip on the settled frame — it has just landed and is still
+  // finding its shape.
+  if (frame === 0) {
+    px.set(8 + w - 1, cy + 1, body(1));
+    px.set(8 - w + 1, cy + 2, body(1));
+  }
 
   return px;
 }
@@ -824,6 +1000,20 @@ export function enemyFrames(): SpriteFrame[] {
       });
     }
   }
+  // Portraits. A fixed gallery rather than one per person, mapped by id in
+  // ui/faces.ts — the atlas is a fixed budget and a cast that grows should not
+  // grow it. Twelve is comfortably more than the ten named townsfolk, so no two
+  // people who can stand in the same square ever share a face.
+  for (let i = 0; i < PORTRAIT_COUNT; i++) {
+    out.push({
+      key: `ui.face.${i}`,
+      buffer: portraitFrame(portraitSpecFor(i)),
+      palette: PAL_FACE,
+      anchor: [0, 0],
+      lit: false,
+    });
+  }
+
   for (let f = 0; f < 2; f++) {
     out.push({
       key: `slime.hop.${f}`,

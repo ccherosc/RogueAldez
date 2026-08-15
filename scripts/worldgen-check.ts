@@ -901,6 +901,10 @@ check('same world seed yields an identical climate map', sameClimate);
       for (const r of town.residents) {
         if (r.id.startsWith('guard-')) continue;
         const person = TOWNSFOLK.find((t) => t.id === r.id)!;
+        // Extras and guards are not the cast: they have a role first and a
+        // nature chosen to match it, so there is no identity for the role to
+        // contradict. The rule exists to stop *Mara* being a noble.
+        if (!person) continue;
         if (!ESSENCE_OK[person.essence].includes(r.role)) essenceViolations++;
         if (!roleMoves.has(r.id)) roleMoves.set(r.id, new Set());
         roleMoves.get(r.id)!.add(r.role);

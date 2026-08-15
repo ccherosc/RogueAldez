@@ -19,6 +19,11 @@ export interface TalkView {
   name: string;
   role: string;
   line: string;
+  /** atlas key of the speaker's face, e.g. `ui.face.3` */
+  face?: string;
+  /** shown when a speech runs to several lines */
+  page?: number;
+  pages?: number;
   /** how many Drafts this person has met Aldez in */
   met: number;
   /** shown once they half-remember him */
@@ -32,7 +37,12 @@ export function drawTalk(batch: SpriteBatch, view: TalkView): void {
   batch.fill(0, top, viewport.w, viewport.h - top, 0.82);
   for (let x = 0; x < viewport.w; x += 8) batch.draw('ui.rule', x, top, { alpha: 0.5 });
 
-  const left = 16;
+  // The portrait sits at the left, overlapping the top rule so it reads as
+  // leaning into frame rather than sitting in a box beside the text.
+  const hasFace = view.face !== undefined;
+  if (hasFace) batch.draw(view.face!, 8, top + 4, { scale: 1 });
+
+  const left = hasFace ? 44 : 16;
   drawText(batch, left, top + 8, view.name, 1);
   // The role sits under the name, dimmer: it is the part that is temporary.
   drawText(batch, left, top + 17, view.role, 0.55);
@@ -45,6 +55,13 @@ export function drawTalk(batch: SpriteBatch, view: TalkView): void {
     drawText(batch, left, top + 41, view.truth, 0.45);
   }
 
-  const hint = view.shop ? 'z trade    x leave' : 'x leave';
+  // A page counter, so a long speech does not look like it has hung.
+  if ((view.pages ?? 1) > 1) {
+    drawText(batch, viewport.w - 40, top + 8, `${(view.page ?? 0) + 1}/${view.pages}`, 0.4);
+  }
+
+  const more = (view.page ?? 0) < (view.pages ?? 1) - 1;
+  const hint = more ? 'z more    x leave'
+    : view.shop ? 'z trade    x leave' : 'x leave';
   drawTextCentred(batch, viewport.w / 2, viewport.h - 9, hint, 0.6);
 }

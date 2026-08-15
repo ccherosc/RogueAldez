@@ -110,6 +110,17 @@ export interface ConditionProfile {
   bustle: number;
   /** how many guards, and how hard they come for you */
   guards: number;
+  /**
+   * Unnamed extras on top of the named cast.
+   *
+   * The cast is capped at ten people because ten is how many a player can learn
+   * to recognise across lives — that is the whole mechanism. But ten people in a
+   * town forty-eight tiles across is a village green with a rumour of a village,
+   * and a burned Amberwake had five. Extras fill the streets without diluting
+   * the thing the named cast is for: they have no id, no truth, and no memory,
+   * and they say what anyone here would say.
+   */
+  extras: number;
   provides: Tag[];
 }
 
@@ -118,42 +129,42 @@ export const CONDITION_PROFILES: Record<TownCondition, ConditionProfile> = {
     label: 'in good years',
     mood: 'the market is loud and the bells are rung for nothing at all',
     roles: ['merchant', 'smith', 'innkeeper', 'noble', 'farmer', 'child', 'priest', 'guard'],
-    population: 9, intact: 1, bustle: 8, guards: 2,
+    population: 9, intact: 1, bustle: 14, guards: 2, extras: 10,
     provides: ['settled', 'fertile'],
   },
   occupied: {
     label: 'under the crown',
     mood: 'someone else decides who may walk here after dark',
     roles: ['guard', 'soldier', 'merchant', 'smith', 'innkeeper', 'farmer', 'noble'],
-    population: 7, intact: 0.95, bustle: 4, guards: 5,
+    population: 7, intact: 0.95, bustle: 9, guards: 5, extras: 8,
     provides: ['settled', 'patrolled'],
   },
   besieged: {
     label: 'behind the barricades',
     mood: 'the gates are shut and nobody will say against what',
     roles: ['soldier', 'smith', 'healer', 'priest', 'guard', 'beggar'],
-    population: 6, intact: 0.8, bustle: 2, guards: 4,
+    population: 6, intact: 0.8, bustle: 6, guards: 4, extras: 6,
     provides: ['patrolled', 'ruined'],
   },
   abandoned: {
     label: 'left behind',
     mood: 'the doors stand open and the wind has been through every room',
     roles: ['scavenger', 'beggar', 'drunk', 'priest'],
-    population: 3, intact: 0.6, bustle: 0, guards: 0,
+    population: 3, intact: 0.6, bustle: 2, guards: 0, extras: 2,
     provides: ['ruined', 'wild'],
   },
   burned: {
     label: 'after the fire',
     mood: 'the bell tower still stands, which everyone finds harder than if it did not',
     roles: ['scavenger', 'beggar', 'healer', 'priest', 'drunk'],
-    population: 4, intact: 0.35, bustle: 1, guards: 1,
+    population: 4, intact: 0.35, bustle: 4, guards: 1, extras: 3,
     provides: ['ruined', 'barren'],
   },
   plagued: {
     label: 'shuttered',
     mood: 'chalk marks on the doors, and nobody stands close to anybody',
     roles: ['healer', 'priest', 'beggar', 'guard', 'drunk'],
-    population: 4, intact: 0.9, bustle: 1, guards: 2,
+    population: 4, intact: 0.9, bustle: 4, guards: 2, extras: 3,
     provides: ['settled', 'dark'],
   },
 };
@@ -184,6 +195,21 @@ const ESSENCE_ROLES: Record<Essence, Role[]> = {
  * things; she can be a scavenger picking usable metal out of a ruin, and she can
  * never be a noble.
  */
+/**
+ * An essence that genuinely permits this role.
+ *
+ * For anonymous extras, who have a role first and a nature second — the opposite
+ * of the named cast. Recording a nature that contradicts the job is the kind of
+ * inconsistency that is invisible until something reasons over it, and something
+ * does: the essence check reads every resident in the town.
+ */
+export function essenceForRole(role: Role): Essence {
+  for (const [essence, roles] of Object.entries(ESSENCE_ROLES) as Array<[Essence, Role[]]>) {
+    if (roles.includes(role)) return essence;
+  }
+  return 'endures';
+}
+
 export function essenceAllows(essence: Essence, role: Role): boolean {
   return ESSENCE_ROLES[essence].includes(role);
 }

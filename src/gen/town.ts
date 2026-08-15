@@ -18,7 +18,7 @@ import type { Rng } from '../core/rng.ts';
 import { TILE } from '../art/tiles.ts';
 import { World, TileKind } from '../world/tilemap.ts';
 import {
-  CONDITION_PROFILES, TOWNSFOLK, roleFor, trades, essenceAllows,
+  CONDITION_PROFILES, TOWNSFOLK, roleFor, trades, essenceAllows, essenceForRole,
 } from '../worldgen/townsfolk.ts';
 import type { TownCondition, Role, Essence } from '../worldgen/townsfolk.ts';
 
@@ -113,6 +113,15 @@ export function plotTiles(plot: Plot): Array<[number, number]> {
 }
 
 export const TOWN_PLOTS = PLOTS;
+
+/** What an unnamed extra is called. Never a personal name — that is the cast's. */
+const EXTRA_NAMES: Partial<Record<Role, string>> = {
+  merchant: 'a stallholder', smith: 'a smith', innkeeper: 'a potboy',
+  noble: 'someone well dressed', farmer: 'a farmhand', child: 'a child',
+  priest: 'an acolyte', guard: 'a watchman', soldier: 'a soldier',
+  healer: 'a nurse', beggar: 'someone begging', scavenger: 'a scavenger',
+  drunk: 'someone drunk',
+};
 
 export function generateTown(condition: TownCondition, rng: Rng): GeneratedTown {
   const profile = CONDITION_PROFILES[condition];
@@ -278,6 +287,30 @@ export function generateTown(condition: TownCondition, rng: Rng): GeneratedTown 
       x: tx * TILE + TILE / 2,
       y: ty * TILE + TILE - 1,
       shop: trades(role),
+    });
+    placed++;
+  }
+
+  // Extras: the crowd the named cast walks through.
+  //
+  // They are placed after the cast so they never take a spot a named person
+  // needed, and they carry no id, so Echo Memory cannot accrue against them —
+  // recognising a face has to mean recognising one of the ten.
+  for (let i = 0; i < profile.extras && placed < spots.length; i++) {
+    const role = rng.pick(profile.roles);
+    const [tx, ty] = spots[placed]!;
+    residents.push({
+      id: `extra-${i}`,
+      name: EXTRA_NAMES[role] ?? 'a townsperson',
+      role,
+      essence: essenceForRole(role),
+      truth: '',
+      anchor: false,
+      x: tx * TILE + TILE / 2,
+      y: ty * TILE + TILE - 1,
+      // Extras do not trade. A market of anonymous stalls would make the named
+      // merchant - the one you are supposed to remember - worth nothing.
+      shop: false,
     });
     placed++;
   }
