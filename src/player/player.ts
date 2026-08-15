@@ -12,6 +12,7 @@
  * per-axis stepping, not a bug.
  */
 
+import { WALK_FRAMES, IDLE_FRAMES } from '../art/sprites.ts';
 import { moveActor } from '../physics/collide.ts';
 import type { Actor, SolidQuery } from '../physics/collide.ts';
 import type { InputSnapshot } from './input.ts';
@@ -20,8 +21,17 @@ import { Sword } from './sword.ts';
 export const WALK_SPEED = 1.5;
 export const DIAGONAL_SPEED = 1.0;
 
-const WALK_FRAME_HOLD = 6;
-const IDLE_FRAME_HOLD = 30;
+/**
+ * Frames each animation frame is held for.
+ *
+ * Chosen so the *cycle duration* is unchanged from the four-frame version: the
+ * walk still comes round every 24 ticks and the breath every 60. More frames at
+ * the old hold would have made Aldez walk slower, which is a change to feel, and
+ * feel was already right — the rig is supposed to buy smoothness, not alter the
+ * cadence the zelda-feel bar was tuned against.
+ */
+const WALK_FRAME_HOLD = Math.max(1, Math.round(24 / WALK_FRAMES));
+const IDLE_FRAME_HOLD = Math.max(1, Math.round(60 / IDLE_FRAMES));
 
 /** Narrower than the 16px sprite so doorways and tile gaps feel generous. */
 const HALF_WIDTH = 5;
@@ -220,13 +230,13 @@ export class Player {
       this.animTimer++;
       if (this.animTimer >= WALK_FRAME_HOLD) {
         this.animTimer = 0;
-        this.animFrame = (this.animFrame + 1) % 4;
+        this.animFrame = (this.animFrame + 1) % WALK_FRAMES;
       }
     } else {
       this.animTimer++;
       if (this.animTimer >= IDLE_FRAME_HOLD) {
         this.animTimer = 0;
-        this.animFrame = (this.animFrame + 1) % 2;
+        this.animFrame = (this.animFrame + 1) % IDLE_FRAMES;
       }
     }
   }

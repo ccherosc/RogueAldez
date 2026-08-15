@@ -12,6 +12,8 @@
 import type { Rng } from '../core/rng.ts';
 import { ART_SCALE } from '../core/const.ts';
 import { PixelBuffer } from './pixels.ts';
+import { walkRig, idleRig, hopRig, restRig, snap, lift } from './rig.ts';
+import type { Rig } from './rig.ts';
 import {
   ci,
   PAL_DUNGEON,
@@ -85,18 +87,32 @@ function line(px: PixelBuffer, x0: number, y0: number, x1: number, y1: number, c
  * ~12px past the body per the zelda-feel bar — stays inside its own cell.
  * The 16x24 body is blitted in at BODY_OFF and every frame anchors at the feet.
  */
+/**
+ * Frames in a cycle.
+ *
+ * Six and four, up from four and two. The old numbers were a budget rather than
+ * a decision — every frame was hand-plotted, so the cycle stopped where the
+ * authoring got tedious. With the rig these are loop bounds, and the constraint
+ * that replaces authoring cost is atlas space, which is a much better constraint
+ * to be up against.
+ */
+export const WALK_FRAMES = 6;
+export const IDLE_FRAMES = 4;
+
+/**
+ * Enemies get four rather than six.
+ *
+ * They are half the size of Aldez and most of them are on screen briefly. Four
+ * is where the extra frames stop being visible on a sixteen-pixel body, and the
+ * atlas is a shared budget.
+ */
+export const ENEMY_WALK_FRAMES = 4;
+
 export const PLAYER_CELL = 32;
 const BODY_OFF: [number, number] = [8, 5];
 const PLAYER_ANCHOR: [number, number] = [16, 27];
 
-interface Pose {
-  /** -1 left leg forward, 0 neutral, 1 right leg forward */
-  legPhase: -1 | 0 | 1;
-  /** 1px vertical body bob on passing frames — most of the walk-cycle readability */
-  bob: 0 | 1;
-}
-
-function drawPlayerBody(dir: Dir, pose: Pose): PixelBuffer {
+function drawPlayerBody(dir: Dir, rig: Rig): PixelBuffer {
   const P = PAL_PLAYER;
   const skin = (n: number) => ci(P, `skin.${n * 2}`);
   const cloak = (n: number) => ci(P, `cloak.${n * 2}`);
@@ -108,7 +124,15 @@ function drawPlayerBody(dir: Dir, pose: Pose): PixelBuffer {
   const OL = ci(P, 'outline');
 
   const px = new PixelBuffer(16, 24);
-  const b = pose.bob;
+
+  // The rig arrives in real numbers and is rounded here, once. Torso and head
+  // ride the bob; the legs do not, because feet stay on the ground — that
+  // difference is the entire reason a walk reads as walking rather than as a
+  // sprite being moved up and down.
+  const r = snap(rig);
+  const b = r.bob;
+  const hx = r.sway + r.headX;
+  const hy = r.bob;   // the head rides the torso — see rig.ts on why
 
   /**
    * In profile the two legs sit side by side with no gap, so without a value
@@ -116,10 +140,18 @@ function drawPlayerBody(dir: Dir, pose: Pose): PixelBuffer {
    * separates them and reads as depth.
    */
   const legs = (profile: boolean): void => {
-    const lTop = 18 + (pose.legPhase === 1 ? 1 : 0);
-    const rTop = 18 + (pose.legPhase === -1 ? 1 : 0);
-    const far: [number, number, number] = [5, lTop, profile ? cloak(0) : cloak(1)];
-    const near: [number, number, number] = [8, rTop, cloak(1)];
+    // Front-on the stride reads as one leg lifting toward the viewer; in profile
+    // it reads as the legs passing each other. Same rig, two projections.
+    const far: [number, number, number] = [
+      5 + (profile ? r.legFarX : 0),
+      18 + (profile ? 0 : r.legFarY),
+      profile ? cloak(0) : cloak(1),
+    ];
+    const near: [number, number, number] = [
+      8 + (profile ? r.legNearX : 0),
+      18 + (profile ? 0 : r.legNearY),
+      cloak(1),
+    ];
 
     for (const [x, top, trouser] of [far, near]) {
       px.rect(x, top, 3, 20 - top, trouser);
@@ -131,69 +163,75 @@ function drawPlayerBody(dir: Dir, pose: Pose): PixelBuffer {
   if (dir === 'down' || dir === 'up') {
     // Swept brown hair. The silver streak sits front-left and is the single most
     // recognisable thing about him at this size.
-    px.rect(6, 2 + b, 4, 1, hair(1));
-    px.rect(5, 3 + b, 6, 1, hair(1));
-    px.rect(4, 4 + b, 8, 3, hair(1));
-    px.hline(4, 4 + b, 8, hair(1));
-    px.hline(4, 6 + b, 8, hair(0)); // fringe shadow
-    px.set(5, 3 + b, streak);
-    px.set(5, 4 + b, streak);
-    px.set(6, 4 + b, streak);
+    px.rect(6 + hx, 2 + hy, 4, 1, hair(1));
+    px.rect(5 + hx, 3 + hy, 6, 1, hair(1));
+    px.rect(4 + hx, 4 + hy, 8, 3, hair(1));
+    px.hline(4 + hx, 4 + hy, 8, hair(1));
+    px.hline(4 + hx, 6 + hy, 8, hair(0)); // fringe shadow
+    px.set(5 + hx, 3 + hy, streak);
+    px.set(5 + hx, 4 + hy, streak);
+    px.set(6 + hx, 4 + hy, streak);
 
     if (dir === 'down') {
-      px.rect(5, 7 + b, 6, 4, skin(0));
-      px.hline(5, 7 + b, 6, skin(1));
-      px.set(6, 8 + b, OL); px.set(9, 8 + b, OL);
-      px.hline(6, 10 + b, 4, hair(0)); // beard
+      px.rect(5 + hx, 7 + hy, 6, 4, skin(0));
+      px.hline(5 + hx, 7 + hy, 6, skin(1));
+      px.set(6 + hx, 8 + hy, OL); px.set(9 + hx, 8 + hy, OL);
+      px.hline(6 + hx, 10 + hy, 4, hair(0)); // beard
     } else {
-      px.rect(4, 7 + b, 8, 4, hair(1)); // back of the head
-      px.hline(4, 7 + b, 8, hair(0));
+      px.rect(4 + hx, 7 + hy, 8, 4, hair(1)); // back of the head
+      px.hline(4 + hx, 7 + hy, 8, hair(0));
     }
 
     // crimson scarf at the neck
-    px.rect(4, 11 + b, 8, 2, scarf(1));
-    px.hline(4, 12 + b, 8, scarf(0));
+    px.rect(4 + r.sway, 11 + b, 8, 2, scarf(1));
+    px.hline(4 + r.sway, 12 + b, 8, scarf(0));
 
-    // cloak — wider than the shoulders so the silhouette reads as a drape
-    px.rect(3, 13 + b, 10, 5, cloak(1));
-    px.hline(3, 13 + b, 10, cloak(2));
-    px.vline(12, 13 + b, 5, cloak(0));
-    px.rect(11, 12 + b, 2, 3, cloak(0)); // pauldron, his left shoulder
-    px.hline(11, 12 + b, 2, cloak(2));
-    px.rect(4, 17 + b, 8, 1, leather); // belt
+    // cloak — wider than the shoulders so the silhouette reads as a drape, and
+    // it trails a frame behind the body rather than moving rigidly with it.
+    px.rect(3 + r.sway, 13 + b - r.trail, 10, 5 + r.trail, cloak(1));
+    px.hline(3 + r.sway, 13 + b - r.trail, 10, cloak(2));
+    px.vline(12 + r.sway, 13 + b, 5, cloak(0));
+    px.rect(11 + r.sway, 12 + b - r.breath, 2, 3, cloak(0)); // pauldron, his left shoulder
+    px.hline(11 + r.sway, 12 + b - r.breath, 2, cloak(2));
+    px.rect(4 + r.sway, 17 + b, 8, 1, leather); // belt
 
     // hands; the Formcraft rune glows on the gloved one
-    px.rect(3, 15 + b, 1, 3, cloak(1));
-    px.rect(3, 17 + b, 1, 1, skin(0));
-    px.set(3, 16 + b, rune);
-    px.rect(13, 15 + b, 1, 2, cloak(1));
+    const nx = 3 + r.sway + r.armNearX;
+    const ny = 15 + b + r.armNearY;
+    px.rect(nx, ny, 1, 3, cloak(1));
+    px.rect(nx, ny + 2, 1, 1, skin(0));
+    px.set(nx, ny + 1, rune);
+    px.rect(13 + r.sway + r.armFarX, 15 + b + r.armFarY, 1, 2, cloak(1));
     legs(false);
   } else {
     // profile — hair sweeps back, cloak trails behind
-    px.rect(5, 2 + b, 4, 1, hair(1));
-    px.rect(4, 3 + b, 6, 1, hair(1));
-    px.rect(4, 4 + b, 7, 3, hair(1));
-    px.rect(10, 4 + b, 2, 3, hair(0)); // swept-back tail
-    px.hline(4, 6 + b, 7, hair(0));
-    px.set(4, 3 + b, streak);
-    px.set(4, 4 + b, streak);
+    px.rect(5 + hx, 2 + hy, 4, 1, hair(1));
+    px.rect(4 + hx, 3 + hy, 6, 1, hair(1));
+    px.rect(4 + hx, 4 + hy, 7, 3, hair(1));
+    px.rect(10 + hx, 4 + hy, 2, 3, hair(0)); // swept-back tail
+    px.hline(4 + hx, 6 + hy, 7, hair(0));
+    px.set(4 + hx, 3 + hy, streak);
+    px.set(4 + hx, 4 + hy, streak);
 
-    px.rect(4, 7 + b, 6, 4, skin(0));
-    px.hline(4, 7 + b, 6, skin(1));
-    px.set(5, 8 + b, OL); // single visible eye
-    px.hline(5, 10 + b, 4, hair(0)); // beard
+    px.rect(4 + hx, 7 + hy, 6, 4, skin(0));
+    px.hline(4 + hx, 7 + hy, 6, skin(1));
+    px.set(5 + hx, 8 + hy, OL); // single visible eye
+    px.hline(5 + hx, 10 + hy, 4, hair(0)); // beard
 
     px.rect(4, 11 + b, 7, 2, scarf(1));
     px.hline(4, 12 + b, 7, scarf(0));
 
     px.rect(4, 13 + b, 8, 5, cloak(1));
     px.hline(4, 13 + b, 8, cloak(2));
-    px.rect(11, 13 + b, 2, 5, cloak(0)); // cloak trailing behind
+    // The trailing cloak lengthens as he swings through the stride.
+    px.rect(11, 13 + b, 2, 5 - r.trail, cloak(0));
     px.rect(4, 17 + b, 7, 1, leather);
 
-    px.rect(3, 15 + b, 1, 3, cloak(1)); // leading arm
-    px.set(3, 17 + b, skin(0));
-    px.set(3, 16 + b, rune);
+    const ax = 3 + r.armNearX;
+    const ay = 15 + b + r.armNearY;
+    px.rect(ax, ay, 1, 3, cloak(1)); // leading arm
+    px.set(ax, ay + 2, skin(0));
+    px.set(ax, ay + 1, rune);
     legs(true);
   }
 
@@ -379,20 +417,24 @@ export function playerFrames(): SpriteFrame[] {
     const mirror = dir === 'right';
     const fix = (p: PixelBuffer) => (mirror ? p.mirrored() : p);
 
-    // idle: 2 frames, a slow breath
-    emit(`player.${dir}.idle.0`, fix(compose(drawPlayerBody(src, { legPhase: 0, bob: 0 }))), dir);
-    emit(`player.${dir}.idle.1`, fix(compose(drawPlayerBody(src, { legPhase: 0, bob: 1 }))), dir);
+    // Both cycles are now loops over a sampled curve rather than lists of
+    // authored poses, which is the whole point of the rig: these two constants
+    // are the frame counts, and raising them costs nothing but atlas space.
+    for (let i = 0; i < IDLE_FRAMES; i++) {
+      emit(
+        `player.${dir}.idle.${i}`,
+        fix(compose(drawPlayerBody(src, idleRig(i / IDLE_FRAMES)))),
+        dir,
+      );
+    }
 
-    // walk: contact, down, passing, up
-    const cycle: Pose[] = [
-      { legPhase: -1, bob: 0 },
-      { legPhase: 0, bob: 0 },
-      { legPhase: 1, bob: 0 },
-      { legPhase: 0, bob: 1 },
-    ];
-    cycle.forEach((pose, i) => {
-      emit(`player.${dir}.walk.${i}`, fix(compose(drawPlayerBody(src, pose))), dir);
-    });
+    for (let i = 0; i < WALK_FRAMES; i++) {
+      emit(
+        `player.${dir}.walk.${i}`,
+        fix(compose(drawPlayerBody(src, walkRig(i / WALK_FRAMES, src === 'left')))),
+        dir,
+      );
+    }
 
     // attack: 3 frames matching the 3/6/6 windup-active-recovery phases
     const arcs: Record<Dir, Array<[number, number, number, number]>> = {
@@ -401,13 +443,16 @@ export function playerFrames(): SpriteFrame[] {
       left:  [[12, 14, 20, 6], [12, 18, 1, 20], [12, 22, 6, 30]],
       right: [[12, 14, 20, 6], [12, 18, 1, 20], [12, 22, 6, 30]],
     };
-    const poses: Pose[] = [
-      { legPhase: 0, bob: 1 },
-      { legPhase: -1, bob: 0 },
-      { legPhase: 0, bob: 0 },
+    // Wind-up leans back, the swing drives forward, the recovery settles. Taken
+    // from the walk curve at three points rather than hand-posed, so the attack
+    // shares the same body language as the walk.
+    const swing: Rig[] = [
+      { ...walkRig(0.25, src === 'left'), sway: -1, trail: 1 },
+      { ...walkRig(0.75, src === 'left'), sway: 1, trail: -1 },
+      { ...restRig(), bob: -1 },
     ];
     arcs[src].forEach((seg, i) => {
-      const body = drawPlayerBody(src, poses[i]!);
+      const body = drawPlayerBody(src, swing[i]!);
       emit(
         `player.${dir}.attack.${i}`,
         fix(compose(body, (c) => drawSword(c, seg[0], seg[1], seg[2], seg[3]))),
@@ -426,7 +471,7 @@ export function playerFrames(): SpriteFrame[] {
 const ENEMY_CELL = 16;
 const ENEMY_ANCHOR: [number, number] = [8, 15];
 
-function octorokFrame(dir: Dir, frame: number): PixelBuffer {
+function octorokFrame(dir: Dir, phase: number): PixelBuffer {
   const P = PAL_OCTOROK;
   const body = (n: number) => ci(P, `body.${n * 2}`);
   const belly = (n: number) => ci(P, `belly.${n * 2}`);
@@ -438,10 +483,13 @@ function octorokFrame(dir: Dir, frame: number): PixelBuffer {
   px.ellipse(4, 10, 8, 3, body(1)); // shaded underside
   px.ellipse(5, 9, 6, 3, belly(0));
 
-  // four stubby legs; alternate on the two frames
-  const lift = frame === 0 ? [0, 1, 0, 1] : [1, 0, 1, 0];
+  // Four stubby legs on a travelling wave rather than an on/off alternation.
+  // Each leg is a quarter-cycle behind the one in front, which is how anything
+  // with more than two legs actually moves — and it means the cycle reads at any
+  // frame count instead of only at two.
   [3, 6, 9, 12].forEach((lx, i) => {
-    px.rect(lx, 12 - lift[i]!, 2, 2 + lift[i]!, body(1));
+    const legLift = Math.round(lift(phase + i * 0.25) * 1.6);
+    px.rect(lx, 12 - legLift, 2, 2 + legLift, body(1));
   });
 
   // snout points the way it faces
@@ -469,12 +517,15 @@ function octorokFrame(dir: Dir, frame: number): PixelBuffer {
   return px;
 }
 
-function moblinFrame(dir: Dir, frame: number): PixelBuffer {
+function moblinFrame(dir: Dir, phase: number): PixelBuffer {
   const P = PAL_MOBLIN;
   const body = (n: number) => ci(P, `body.${n * 2}`);
   const gear = (n: number) => ci(P, `gear.${n * 2}`);
   const px = new PixelBuffer(ENEMY_CELL, ENEMY_CELL);
-  const b = frame === 0 ? 0 : 1;
+  // Heavier than Aldez, so it bobs further and its legs travel less: the same
+  // rig, read through a different body.
+  const r = snap(walkRig(phase, dir === 'left' || dir === 'right'));
+  const b = -r.bob;
 
   // snout-forward head
   px.rect(4, 1 + b, 7, 5, body(2));
@@ -493,18 +544,20 @@ function moblinFrame(dir: Dir, frame: number): PixelBuffer {
   px.hline(4, 7 + b, 7, body(3));
   px.rect(4, 10 + b, 7, 1, gear(0));
 
-  // legs alternate
-  px.rect(4, 12, 3, 4 - (frame === 0 ? 0 : 1), body(1));
-  px.rect(8, 12, 3, 4 - (frame === 0 ? 1 : 0), body(1));
+  // Legs from the rig: they shorten as they lift, and shift in profile.
+  px.rect(4 + r.legFarX, 12, 3, 4 - Math.abs(r.legFarY), body(1));
+  px.rect(8 + r.legNearX, 12, 3, 4 - Math.abs(r.legNearY), body(1));
 
   // spear, angled per facing
   const spear: Record<Dir, [number, number, number, number]> = {
     down: [12, 4, 12, 15], up: [12, 12, 12, 1],
     left: [12, 6, 1, 6], right: [12, 6, 1, 6],
   };
+  // The spear rides the body rather than floating: without this the weapon is
+  // the one part of the sprite that does not move, which reads as a bug.
   const s = spear[dir];
-  line(px, s[0], s[1], s[2], s[3], gear(1));
-  line(px, s[2], s[3], s[2], s[3], ci(P, 'metal.2'));
+  line(px, s[0], s[1] + b, s[2], s[3] + b, gear(1));
+  line(px, s[2], s[3] + b, s[2], s[3] + b, ci(P, 'metal.2'));
 
   px.outline(ci(P, 'outline'), 'all');
   return px;
@@ -983,18 +1036,19 @@ function folkSprite(kind: 'guard' | 'trader' | 'worker' | 'gentry' | 'poor', fra
 export function enemyFrames(): SpriteFrame[] {
   const out: SpriteFrame[] = [];
   for (const dir of DIRS) {
-    for (let f = 0; f < 2; f++) {
+    for (let f = 0; f < ENEMY_WALK_FRAMES; f++) {
       const src: Dir = dir === 'right' ? 'left' : dir;
       const mir = (p: PixelBuffer) => (dir === 'right' ? p.mirrored() : p);
+      const phase = f / ENEMY_WALK_FRAMES;
       out.push({
         key: `octorok.${dir}.walk.${f}`,
-        buffer: mir(octorokFrame(src, f)),
+        buffer: mir(octorokFrame(src, phase)),
         palette: PAL_OCTOROK,
         anchor: ENEMY_ANCHOR,
       });
       out.push({
         key: `moblin.${dir}.walk.${f}`,
-        buffer: mir(moblinFrame(src, f)),
+        buffer: mir(moblinFrame(src, phase)),
         palette: PAL_MOBLIN,
         anchor: ENEMY_ANCHOR,
       });

@@ -1,5 +1,6 @@
 import { confineToRoom } from '../entity/store.ts';
 import { ROOM_W, ROOM_H } from '../core/const.ts';
+import { ENEMY_WALK_FRAMES } from '../art/sprites.ts';
 /**
  * Enemy behaviour.
  *
@@ -223,10 +224,16 @@ export class Brains {
 
   private animate(e: Entity): void {
     e.animTimer++;
-    const hold = e.variant === 'keese' ? 5 : 10;
+    // Keese and slimes are two-frame creatures — a bat's wingbeat and a slime's
+    // squash are single events, not cycles. Walkers run the rigged cycle.
+    const frames = e.variant === 'keese' || e.variant === 'slime'
+      ? 2 : ENEMY_WALK_FRAMES;
+    // Held so the cycle *duration* matches what it was at two frames: more
+    // frames should buy smoothness, never a slower gait.
+    const hold = e.variant === 'keese' ? 5 : Math.max(1, Math.round(20 / frames));
     if (e.animTimer >= hold) {
       e.animTimer = 0;
-      e.animFrame = (e.animFrame + 1) % 2;
+      e.animFrame = (e.animFrame + 1) % frames;
     }
   }
 

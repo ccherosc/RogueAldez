@@ -91,6 +91,56 @@ check(
   missingIcons.map((r) => `${r.id}->${r.icon}`).join(' '),
 );
 
+// 9. Animation cycles must actually animate.
+//
+// The rig samples a continuous curve and rounds to whole pixels, so a cycle can
+// silently contain duplicates: sampling a *sine* at six points gives
+// sin(60 deg) === sin(120 deg), and the first six-frame walk shipped four
+// distinct poses and two pairs of identical twins. It looked like an animation
+// bug and was arithmetic. Nothing else would have caught it — the frames exist,
+// resolve, and pack.
+{
+  const cycles = new Map<string, string[]>();
+  for (const key of Object.keys(manifest.cells)) {
+    const m = /^(.*)\.(\d+)$/.exec(key);
+    if (!m) continue;
+    const stem = m[1]!;
+    if (!/\.(walk|idle|hop|fly)$/.test(stem)) continue;
+    const list = cycles.get(stem) ?? [];
+    list.push(key);
+    cycles.set(stem, list);
+  }
+
+  const duplicated: string[] = [];
+  for (const [stem, keys] of cycles) {
+    if (keys.length < 2) continue;
+    const seen = new Map<string, string>();
+    for (const key of keys.sort()) {
+      const c = manifest.cells[key]!;
+      // Hash the cell's own pixels out of the atlas page.
+      let h = 2166136261;
+      for (let y = 0; y < c.h; y++) {
+        for (let x = 0; x < c.w; x++) {
+          const i = ((c.y + y) * png.width + (c.x + x)) * 4;
+          for (let b = 0; b < 4; b++) {
+            h = Math.imul(h ^ png.rgba[i + b]!, 16777619) >>> 0;
+          }
+        }
+      }
+      const sig = String(h);
+      const twin = seen.get(sig);
+      if (twin) duplicated.push(`${stem}: ${twin} == ${key}`);
+      else seen.set(sig, key);
+    }
+  }
+
+  check(
+    'every animation frame differs from its siblings',
+    duplicated.length === 0,
+    duplicated.slice(0, 4).join('  '),
+  );
+}
+
 const expected = readFileSync(join(OUT, 'atlas.hash'), 'utf8').trim();
 check(
   'atlas is current with generators',
