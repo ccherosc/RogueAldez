@@ -118,8 +118,10 @@ function drawPlayerBody(dir: Dir, rig: Rig): PixelBuffer {
   const cloak = (n: number) => ci(P, `cloak.${n * 2}`);
   const scarf = (n: number) => ci(P, `scarf.${n * 2}`);
   const hair = (n: number) => ci(P, `hair.${n * 2}`);
+  const tunic = (n: number) => ci(P, `tunic.${n * 2}`);
   const streak = ci(P, 'streak');
   const leather = ci(P, 'leather');
+  const boot = ci(P, 'boot');
   const rune = ci(P, 'rune');
   const OL = ci(P, 'outline');
 
@@ -145,17 +147,20 @@ function drawPlayerBody(dir: Dir, rig: Rig): PixelBuffer {
     const far: [number, number, number] = [
       5 + (profile ? r.legFarX : 0),
       18 + (profile ? 0 : r.legFarY),
-      profile ? cloak(0) : cloak(1),
+      profile ? tunic(0) : tunic(1),
     ];
     const near: [number, number, number] = [
       8 + (profile ? r.legNearX : 0),
       18 + (profile ? 0 : r.legNearY),
-      cloak(1),
+      tunic(1),
     ];
 
     for (const [x, top, trouser] of [far, near]) {
-      px.rect(x, top, 3, 20 - top, trouser);
-      px.rect(x, 20, 3, 2, leather);
+      // Trousers run to the ankle and the boot takes a single row. Two rows of
+      // near-black under a dark cloak turned the whole lower body into one mass
+      // — the leg needs more light than dark on it to read as a leg.
+      px.rect(x, top, 3, 21 - top, trouser);
+      px.hline(x, 20, 3, boot);
       px.hline(x, 21, 3, OL); // sole
     }
   };
@@ -186,22 +191,39 @@ function drawPlayerBody(dir: Dir, rig: Rig): PixelBuffer {
     px.rect(4 + r.sway, 11 + b, 8, 2, scarf(1));
     px.hline(4 + r.sway, 12 + b, 8, scarf(0));
 
-    // cloak — wider than the shoulders so the silhouette reads as a drape, and
-    // it trails a frame behind the body rather than moving rigidly with it.
+    // The cloak is the outer silhouette — wider than the shoulders so it reads
+    // as a drape — and it trails a frame behind the body rather than moving with
+    // it rigidly.
     px.rect(3 + r.sway, 13 + b - r.trail, 10, 5 + r.trail, cloak(1));
     px.hline(3 + r.sway, 13 + b - r.trail, 10, cloak(2));
     px.vline(12 + r.sway, 13 + b, 5, cloak(0));
-    px.rect(11 + r.sway, 12 + b - r.breath, 2, 3, cloak(0)); // pauldron, his left shoulder
-    px.hline(11 + r.sway, 12 + b - r.breath, 2, cloak(2));
-    px.rect(4 + r.sway, 17 + b, 8, 1, leather); // belt
+    px.vline(3 + r.sway, 13 + b, 5, cloak(0));
 
-    // hands; the Formcraft rune glows on the gloved one
+    // The tunic sits inside the cloak, two pixels in from each edge. That gap is
+    // the whole reason the torso now reads as a body wearing a cloak instead of
+    // a rectangle: the eye needs to see the cloak *behind* something.
+    px.rect(5 + r.sway, 13 + b, 6, 5, tunic(2));
+    px.hline(5 + r.sway, 13 + b, 6, tunic(2));      // lit chest
+    px.vline(10 + r.sway, 13 + b, 5, tunic(1));     // shaded right side
+    px.rect(4 + r.sway, 16 + b, 8, 1, leather);     // belt, across both
+    px.set(7 + r.sway, 16 + b, ci(P, 'scarf.2'));   // buckle
+
+    px.rect(11 + r.sway, 12 + b - r.breath, 2, 3, cloak(0)); // pauldron
+    px.hline(11 + r.sway, 12 + b - r.breath, 2, cloak(2));
+
+    // Arms, drawn as sleeve plus hand rather than a one-pixel stub. The gloved
+    // hand carries the Formcraft rune.
     const nx = 3 + r.sway + r.armNearX;
-    const ny = 15 + b + r.armNearY;
-    px.rect(nx, ny, 1, 3, cloak(1));
-    px.rect(nx, ny + 2, 1, 1, skin(0));
-    px.set(nx, ny + 1, rune);
-    px.rect(13 + r.sway + r.armFarX, 15 + b + r.armFarY, 1, 2, cloak(1));
+    const ny = 14 + b + r.armNearY;
+    px.rect(nx, ny, 2, 3, tunic(1));
+    px.hline(nx, ny, 2, tunic(2));
+    px.rect(nx, ny + 3, 2, 1, skin(0));
+    px.set(nx, ny + 3, rune);
+
+    const fx2 = 12 + r.sway + r.armFarX;
+    const fy2 = 14 + b + r.armFarY;
+    px.rect(fx2, fy2, 2, 3, tunic(0));
+    px.rect(fx2, fy2 + 3, 2, 1, skin(0));
     legs(false);
   } else {
     // profile — hair sweeps back, cloak trails behind
@@ -223,15 +245,19 @@ function drawPlayerBody(dir: Dir, rig: Rig): PixelBuffer {
 
     px.rect(4, 13 + b, 8, 5, cloak(1));
     px.hline(4, 13 + b, 8, cloak(2));
+    // The tunic shows along the leading edge, where a cloak falls open.
+    px.rect(4, 13 + b, 4, 5, tunic(2));
+    px.hline(4, 13 + b, 4, tunic(2));
     // The trailing cloak lengthens as he swings through the stride.
     px.rect(11, 13 + b, 2, 5 - r.trail, cloak(0));
-    px.rect(4, 17 + b, 7, 1, leather);
+    px.rect(4, 16 + b, 7, 1, leather);
+    px.set(5, 16 + b, ci(P, 'scarf.2'));
 
     const ax = 3 + r.armNearX;
-    const ay = 15 + b + r.armNearY;
-    px.rect(ax, ay, 1, 3, cloak(1)); // leading arm
-    px.set(ax, ay + 2, skin(0));
-    px.set(ax, ay + 1, rune);
+    const ay = 14 + b + r.armNearY;
+    px.rect(ax, ay, 2, 3, tunic(1)); // leading arm
+    px.rect(ax, ay + 3, 2, 1, skin(0));
+    px.set(ax, ay + 3, rune);
     legs(true);
   }
 
@@ -724,55 +750,94 @@ function portraitFrame(spec: PortraitSpec): PixelBuffer {
   return px;
 }
 
+/**
+ * A slime, settled or mid-hop.
+ *
+ * Opaque, and deliberately so. The previous one leaned on translucency — dark
+ * underside, pale crown, low internal contrast — and the result dissolved into
+ * whatever it was standing on. A slime wants the opposite: a solid, saturated
+ * silhouette you can identify from across the room, with the "wet" carried by
+ * one hard specular highlight rather than by the whole body being faint.
+ *
+ * The shape is the Dragon Warrior teardrop: a wide flat base, shoulders that
+ * curve in, and a small point on top. That point is doing more work than
+ * anything else here — a plain dome reads as a rock, and the peak is what makes
+ * it read as something with surface tension. The face sits low and central, big
+ * enough to be the second thing you see.
+ */
 function slimeFrame(frame: number): PixelBuffer {
   const P = PAL_SLIME;
   const body = (n: number) => ci(P, `body.${n * 2}`);
   const px = new PixelBuffer(ENEMY_CELL, ENEMY_CELL);
 
-  // Squat and wide at rest, taller and narrower at the top of the hop. The two
-  // frames are one squash-and-stretch cycle, which is the whole animation and
-  // also the whole tell: a player who watches one for three seconds knows
-  // everything it will ever do.
+  // Squat and wide at rest; taller and drawn in at the top of a hop. Two frames
+  // of squash and stretch, which is the whole animation and the whole tell.
   const w = frame === 0 ? 6 : 5;
-  const h = frame === 0 ? 4 : 6;
-  const cy = frame === 0 ? 11 : 9;
+  const base = frame === 0 ? 14 : 13;
+  const top = frame === 0 ? 4 : 1;
 
-  px.ellipse(8, cy, w, h, body(1));
-  px.ellipse(8, cy, w - 1, h - 1, body(2));
-
-  // Translucency, which is the one thing that says "jelly" rather than "rock":
-  // the underside stays dark and the crown goes light, and the boundary between
-  // them sits high, as though light is getting most of the way through.
-  px.ellipse(7, cy - 1, w - 2, h - 2, body(3));
-  px.ellipse(7, cy - 2, w - 3, Math.max(1, h - 4), body(3));
-
-  // A wet meniscus where it meets the ground, wider than the body — surface
-  // tension, and it seats the creature instead of leaving it hovering.
-  px.ellipse(8, cy + h - 1, w, 1, body(0));
-  px.set(8 - w, cy + h - 1, body(1));
-  px.set(8 + w, cy + h - 1, body(1));
-
-  // Specular bead, up and left with the game's one light direction, plus a
-  // smaller second glint so the surface reads as curved rather than painted.
-  px.set(6, cy - h + 2, body(3));
-  px.set(7, cy - h + 2, body(3));
-  px.set(6, cy - h + 3, body(3));
-  px.set(10, cy - 1, body(2));
-
-  // Eyes float inside it rather than sitting on it: two dark motes with a pale
-  // ring, set deep enough to read as suspended in the mass.
-  for (const ex of [6, 10]) {
-    px.set(ex, cy, ci(P, 'eye.0'));
-    px.set(ex, cy - 1, ci(P, 'eye.1'));
+  // The dome, built as rows so the profile can be shaped by hand: nearly
+  // vertical at the base, curving in hard across the shoulders, then the point.
+  const rows: Array<[number, number]> = [];
+  const height = base - top;
+  for (let i = 0; i <= height; i++) {
+    const t = i / height;               // 0 at the peak, 1 at the ground
+    // Half-width as a function of height. The exponent is what gives the
+    // teardrop its shoulders — a circle would use sqrt.
+    // Circular, near enough. Two earlier attempts got this wrong in opposite
+    // directions: a low exponent gives a flat mound that reads as a rock, and a
+    // high one gives a cone that reads as a tent. The Dragon Warrior silhouette
+    // is neither — it is a *round* body with a small nub added on top, and the
+    // nub is drawn separately below rather than being the top of a curve.
+    const halfW = Math.round(w * Math.sqrt(t));
+    rows.push([top + i, Math.max(0, halfW)]);
   }
 
-  // A trailing drip on the settled frame — it has just landed and is still
-  // finding its shape.
-  if (frame === 0) {
-    px.set(8 + w - 1, cy + 1, body(1));
-    px.set(8 - w + 1, cy + 2, body(1));
+  for (const [y, hw] of rows) {
+    if (hw <= 0) { px.set(8, y, body(2)); continue; }
+    px.hline(8 - hw, y, hw * 2 + 1, body(2));
   }
 
+  // The nub: two pixels of peak above the dome, offset a little to the light.
+  // This one detail is what separates "slime" from "boulder" at sixteen pixels.
+  px.set(8, top - 2, body(3));
+  px.hline(8 - 1, top - 1, 2, body(2));
+
+  // Form, in three bands. Light from the upper left, one direction, as
+  // everywhere else in the game.
+  for (const [y, hw] of rows) {
+    if (hw <= 1) continue;
+    // Shaded lower-right crescent.
+    px.hline(8 + hw - 2, y, 2, body(1));
+    // Ground contact goes darkest, which seats it instead of leaving it hovering.
+    if (y >= base - 1) px.hline(8 - hw, y, hw * 2 + 1, body(1));
+    if (y === base) px.hline(8 - hw + 1, y, hw * 2 - 1, body(0));
+  }
+  // Lit upper-left shoulder.
+  for (const [y, hw] of rows) {
+    if (hw <= 2 || y > top + Math.floor(height * 0.55)) continue;
+    px.hline(8 - hw + 1, y, 2, body(3));
+  }
+
+  // The specular: a hard two-pixel bead with a single pixel trailing it. This is
+  // the only thing saying "wet", so it is bright and it has an edge.
+  const gx = 8 - w + 2;
+  const gy = top + Math.max(1, Math.floor(height * 0.3));
+  px.hline(gx, gy, 2, body(3));
+  px.set(gx, gy + 1, body(3));
+
+  // The face: whites big enough to read, dark pupils set slightly inward, and a
+  // small mouth. Placed low and central, where a slime's face belongs.
+  const fy = base - Math.max(3, Math.floor(height * 0.4));
+  for (const ex of [8 - 3, 8 + 2]) {
+    px.rect(ex, fy, 2, 2, ci(P, 'eye.2'));
+  }
+  px.set(8 - 2, fy + 1, ci(P, 'eye.0'));
+  px.set(8 + 2, fy + 1, ci(P, 'eye.0'));
+  // Mouth: a flat line with the corners turned down one pixel.
+  px.hline(8 - 1, fy + 3, 3, ci(P, 'eye.0'));
+
+  px.outline(ci(P, 'outline'), 'all');
   return px;
 }
 

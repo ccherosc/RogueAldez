@@ -158,6 +158,17 @@ export const PAL_DUNGEON = buildPalette('dungeon', {
  */
 export const PAL_PLAYER = buildPalette('player', {
   cloak: ramp(5, { L: 0.26, C: 0.075, H: 268 }, { L: 0.56, C: 0.105, H: 256 }),
+  /**
+   * The garment under the cloak.
+   *
+   * Added because Aldez had no tunic: cloak, torso, trousers and boots were all
+   * one blue-violet, so from the scarf down he read as a single dark mass with a
+   * head on it. A second garment ramp, warmer and a clear step lighter, is what
+   * turns that mass into a chest, a belt and legs — and it costs five of the
+   * eleven palette slots that were still free.
+   */
+  tunic: ramp(5, { L: 0.34, C: 0.050, H: 96 }, { L: 0.62, C: 0.065, H: 108 }),
+  boot: one({ L: 0.28, C: 0.045, H: 56 }),
   scarf: ramp(3, { L: 0.40, C: 0.145, H: 24 }, { L: 0.58, C: 0.170, H: 32 }),
   skin: ramp(3, { L: 0.61, C: 0.080, H: 54 }, { L: 0.78, C: 0.060, H: 64 }),
   hair: ramp(3, { L: 0.27, C: 0.050, H: 52 }, { L: 0.46, C: 0.075, H: 62 }),
@@ -196,8 +207,13 @@ export const PAL_MOBLIN = buildPalette('moblin', {
  * only Erratum in the waking meadow and the meadow's job is to teach.
  */
 export const PAL_SLIME = buildPalette('slime', {
-  body: ramp(7, { L: 0.38, C: 0.085, H: 148 }, { L: 0.78, C: 0.125, H: 132 }),
-  eye: ramp(2, { L: 0.20, C: 0.03, H: 268 }, { L: 0.96, C: 0.02, H: 120 }),
+  // Saturated and opaque, not washed and translucent. The first version pushed
+  // transparency and the creature dissolved into whatever it stood on; a slime
+  // should read as a solid coloured shape from across the room, the way the
+  // Dragon Warrior ones do, with the "wet" carried entirely by one hard specular
+  // highlight rather than by low contrast.
+  body: ramp(7, { L: 0.30, C: 0.115, H: 158 }, { L: 0.74, C: 0.165, H: 140 }),
+  eye: ramp(3, { L: 0.12, C: 0.02, H: 260 }, { L: 0.98, C: 0.01, H: 110 }),
 });
 
 /**
