@@ -261,6 +261,19 @@ export const PAL_PROP = buildPalette('prop', {
   // pool: it is a blue ceramic glaze, and nothing that saturated has ever kept
   // rain off a house.
   thatch: ramp(5, { L: 0.36, C: 0.045, H: 82 }, { L: 0.70, C: 0.075, H: 96 }),
+  /**
+   * Faces, for the townsfolk.
+   *
+   * PAL_PROP had no skin tone, so folkSprite drew every head with `pot.4` — the
+   * lightest step of the blue *ceramic glaze* ramp. Every person in Amberwake,
+   * and the walker on the first screen, had a pale blue face. At sixteen pixels
+   * that does not read as a person with an unusual complexion; it reads as a
+   * tile stuck to their shoulders, which is exactly how it was reported.
+   *
+   * Three steps is all a head this size needs, and three is exactly what was
+   * left under the 28-colour working cap.
+   */
+  face: ramp(3, { L: 0.44, C: 0.060, H: 48 }, { L: 0.74, C: 0.055, H: 62 }),
 });
 
 export const ALL_PALETTES: readonly Palette[] = [

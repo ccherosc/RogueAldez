@@ -1058,8 +1058,15 @@ function folkSprite(kind: 'guard' | 'trader' | 'worker' | 'gentry' | 'poor', fra
   px.rect(4, 10 + sway, 8, 9, body);
   px.hline(4, 10 + sway, 8, kind === 'gentry' ? pot(2) : w(2));
 
-  // Head.
-  px.ellipse(5, 4 + sway, 6, 6, ci(PAL_PROP, 'pot.4'));
+  // Head: skin, with hair over the crown and a shadow under the jaw. A bare
+  // ellipse of one flat colour is what made these read as objects rather than
+  // people even once the colour was right.
+  const face = (n: number) => ci(P, `face.${n * 2}`);
+  px.ellipse(5, 4 + sway, 6, 6, face(1));
+  px.ellipse(5, 3 + sway, 6, 3, face(0));       // hairline shadow
+  px.ellipse(6, 4 + sway, 4, 2, ci(P, 'face.2'));  // lit brow, up and left
+  px.set(6, 6 + sway, ci(P, 'outline'));        // eyes
+  px.set(9, 6 + sway, ci(P, 'outline'));
 
   switch (kind) {
     case 'guard':
